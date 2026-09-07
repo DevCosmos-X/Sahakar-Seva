@@ -1,6 +1,7 @@
 apply plugin: "com.android.application"
 apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
+apply from: project(':react-native-config').projectDir.getPath() + "/dotenv.gradle"
 
 /**
  * This is the configuration block to customize your React Native Android app.
@@ -92,15 +93,25 @@ android {
             keyAlias 'androiddebugkey'
             keyPassword 'android'
         }
+        release {
+            // Credentials come from gradle.properties (SAHAKAR_RELEASE_*), which is gitignored.
+            // Falls back to the debug keystore if they're absent so CI/other machines still build.
+            if (project.hasProperty('SAHAKAR_RELEASE_STORE_FILE')) {
+                storeFile file(SAHAKAR_RELEASE_STORE_FILE)
+                storePassword SAHAKAR_RELEASE_STORE_PASSWORD
+                keyAlias SAHAKAR_RELEASE_KEY_ALIAS
+                keyPassword SAHAKAR_RELEASE_KEY_PASSWORD
+            }
+        }
     }
     buildTypes {
         debug {
             signingConfig signingConfigs.debug
         }
         release {
-            // Caution! In production, you need to generate your own keystore file.
-            // see https://reactnative.dev/docs/signed-apk-android.
-            signingConfig signingConfigs.debug
+            // Signed with the dedicated release keystore when SAHAKAR_RELEASE_* props exist,
+            // otherwise falls back to debug signing (still installable, not publishable).
+            signingConfig project.hasProperty('SAHAKAR_RELEASE_STORE_FILE') ? signingConfigs.release : signingConfigs.debug
             minifyEnabled enableProguardInReleaseBuilds
             proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
         }

@@ -47,3 +47,9 @@ edgeToEdgeEnabled=true
 # Starting from AGP 10.x these opt outs will be removed.
 android.builtInKotlin=false
 android.newDsl=false
+
+# Optional: Release signing credentials (can also be placed in ~/.gradle/gradle.properties)
+# SAHAKAR_RELEASE_STORE_FILE=release.keystore
+# SAHAKAR_RELEASE_KEY_ALIAS=sahakar
+# SAHAKAR_RELEASE_STORE_PASSWORD=your_keystore_password
+# SAHAKAR_RELEASE_KEY_PASSWORD=your_key_password

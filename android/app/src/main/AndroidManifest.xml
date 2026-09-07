@@ -1,6 +1,25 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- CAMERA is for react-native-image-picker's launchCamera (AI photo diagnosis, Phase 10a).
+         Gallery selection (launchImageLibrary) needs no runtime permission on Android 13+ via the
+         system photo picker. Declared optional so the app installs on camera-less devices. -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <!-- RECORD_AUDIO is for speech-to-text (Phase 10b, react-native-speech-recognition-kit) on the
+         describe-step mic and the chat mic. Microphone is optional so the app still installs on
+         mic-less devices; the UI degrades gracefully when STT is unavailable. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-feature android:name="android.hardware.microphone" android:required="false" />
+
+    <!-- Android 11+ package visibility: without this, SpeechRecognizer.isRecognitionAvailable()
+         can't see the on-device speech-recognition service and returns false even when Google
+         Speech Services is installed. Required for the STT engine to be detected. -->
+    <queries>
+      <intent>
+        <action android:name="android.speech.RecognitionService" />
+      </intent>
+    </queries>
 
     <application
       android:name=".MainApplication"
@@ -11,6 +30,16 @@
       android:theme="@style/AppTheme"
       android:usesCleartextTraffic="${usesCleartextTraffic}"
       android:supportsRtl="true">
+
+      <!-- Google Maps SDK for Android key (Phase 10c, LiveTrackingMap via react-native-maps).
+           The value comes from GOOGLE_MAPS_API_KEY in .env: react-native-config's dotenv.gradle
+           emits every .env key as a string resource (resValue), so @string/GOOGLE_MAPS_API_KEY
+           resolves at build time. SECURITY: this key ships in the APK — restrict it in Google
+           Cloud Console to package com.sahakarsevamobile + the app's SHA-1 fingerprints. -->
+      <meta-data
+        android:name="com.google.android.geo.API_KEY"
+        android:value="@string/GOOGLE_MAPS_API_KEY" />
+
       <activity
         android:name=".MainActivity"
         android:label="@string/app_name"
