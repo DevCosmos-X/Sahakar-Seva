@@ -9,5 +9,7 @@ export { default as SearchBar } from './SearchBar';
 export { default as SectionHeader } from './SectionHeader';
 export { default as PromoBanner } from './PromoBanner';
 export { default as ServiceGrid } from './ServiceGrid';
+export { default as ServiceCardGrid } from './ServiceCardGrid';
+export { default as GradientBand } from './GradientBand';
 export { default as ChatWidget } from './ChatWidget';
 export { Chip, ChipRow } from './Chip';

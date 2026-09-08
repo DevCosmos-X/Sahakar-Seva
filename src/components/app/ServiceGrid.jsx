@@ -50,24 +50,30 @@ const styles = StyleSheet.create({
     paddingHorizontal: 2,
   },
   iconSquare: {
-    width: 60,
-    height: 60,
+    width: 58,
+    height: 58,
     borderRadius: radii.radiusLg,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.space2,
+    borderWidth: 1,
+    borderColor: 'rgba(17,24,39,0.05)',
   },
   name: {
     fontSize: fontSizes.fsXs,
-    fontWeight: fontWeights.fwMedium,
-    fontFamily: fontFamilies.interMedium,
-    color: colors.gray700,
+    fontWeight: fontWeights.fwSemibold,
+    fontFamily: fontFamilies.interSemiBold,
+    color: colors.gray800,
     textAlign: 'center',
+    // Reserve a consistent two-line label area so a wrapping name (e.g. "Appliance Repair")
+    // doesn't push its price down and break the grid row's alignment. Single-line names simply
+    // top-align within this fixed block, keeping every tile's price on the same baseline.
+    height: fontSizes.fsXs * 2.6,
   },
   price: {
     fontSize: 10,
-    color: colors.gray400,
-    fontFamily: fontFamilies.interRegular,
-    marginTop: 1,
+    color: colors.gray500,
+    fontFamily: fontFamilies.interMedium,
+    marginTop: 2,
   },
 });

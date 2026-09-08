@@ -5,7 +5,7 @@ import CustomerDashboardScreen from '@screens/customer/CustomerDashboardScreen';
 import BookingScreen from '@screens/customer/BookingScreen';
 import BookingTrackerScreen from '@screens/customer/BookingTrackerScreen';
 import CustomerProfileScreen from '@screens/customer/CustomerProfileScreen';
-import { colors, fontSizes, fontFamilies } from '@theme';
+import { colors, spacing, fontSizes, fontWeights, fontFamilies } from '@theme';
 
 /**
  * CustomerTabs — bottom-tab navigator for the customer portal.
@@ -31,29 +31,62 @@ export default function CustomerTabs() {
         headerShown: false,
         tabBarActiveTintColor: colors.primary600,
         tabBarInactiveTintColor: colors.gray400,
-        tabBarStyle: { backgroundColor: colors.surfaceWhite, borderTopColor: colors.gray200 },
-        tabBarLabelStyle: { fontSize: fontSizes.fsXs, fontFamily: fontFamilies.interMedium },
+        // Premium bar: white surface, hairline top border, soft lift, taller touch targets.
+        // Height/padding are added ON TOP of the bottom safe-area inset (RN bottom-tabs adds the
+        // inset automatically), so this stays correct across devices with/without a gesture bar.
+        tabBarStyle: {
+          backgroundColor: colors.surfaceWhite,
+          borderTopColor: colors.gray100,
+          borderTopWidth: 1,
+          height: 64,
+          paddingTop: spacing.space2,
+          paddingBottom: spacing.space2,
+          elevation: 12,
+          shadowColor: colors.gray900,
+          shadowOffset: { width: 0, height: -2 },
+          shadowOpacity: 0.06,
+          shadowRadius: 8,
+        },
+        tabBarItemStyle: { paddingTop: 2 },
+        tabBarLabelStyle: {
+          fontSize: fontSizes.fsXs,
+          fontFamily: fontFamilies.interSemiBold,
+          fontWeight: fontWeights.fwSemibold,
+          marginTop: 2,
+        },
       }}
     >
       <Tab.Screen
         name="CustomerDashboard"
         component={CustomerDashboardScreen}
-        options={{ title: t('dashboard'), tabBarIcon: ({ color, size }) => <Home color={color} size={size} /> }}
+        options={{
+          title: t('dashboard'),
+          tabBarIcon: ({ color, focused }) => <Home color={color} size={23} strokeWidth={focused ? 2.6 : 2} />,
+        }}
       />
       <Tab.Screen
         name="CustomerBook"
         component={BookingScreen}
-        options={{ title: t('book_service'), tabBarIcon: ({ color, size }) => <CalendarPlus color={color} size={size} /> }}
+        options={{
+          title: t('book_service'),
+          tabBarIcon: ({ color, focused }) => <CalendarPlus color={color} size={23} strokeWidth={focused ? 2.6 : 2} />,
+        }}
       />
       <Tab.Screen
         name="CustomerBookings"
         component={BookingTrackerScreen}
-        options={{ title: t('my_bookings'), tabBarIcon: ({ color, size }) => <ClipboardList color={color} size={size} /> }}
+        options={{
+          title: t('my_bookings'),
+          tabBarIcon: ({ color, focused }) => <ClipboardList color={color} size={23} strokeWidth={focused ? 2.6 : 2} />,
+        }}
       />
       <Tab.Screen
         name="CustomerProfile"
         component={CustomerProfileScreen}
-        options={{ title: t('profile'), tabBarIcon: ({ color, size }) => <User color={color} size={size} /> }}
+        options={{
+          title: t('profile'),
+          tabBarIcon: ({ color, focused }) => <User color={color} size={23} strokeWidth={focused ? 2.6 : 2} />,
+        }}
       />
     </Tab.Navigator>
   );

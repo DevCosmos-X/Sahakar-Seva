@@ -125,11 +125,11 @@ export default function ChatWidget() {
     <>
       {/* Floating action button (always visible while authenticated) */}
       <Pressable
-        style={({ pressed }) => [styles.fab, { bottom: insets.bottom + 78 }, pressed && styles.fabPressed]}
+        style={({ pressed }) => [styles.fab, { bottom: insets.bottom + 76 }, pressed && styles.fabPressed]}
         onPress={() => setOpen(true)}
         accessibilityLabel="Open Sahakar AI assistant"
       >
-        <Bot size={24} color={colors.white} />
+        <Bot size={22} color={colors.white} strokeWidth={2.2} />
         {unread > 0 && (
           <View style={styles.badge}>
             <Text style={styles.badgeText}>{unread}</Text>
@@ -273,13 +273,15 @@ const styles = StyleSheet.create({
   fab: {
     position: 'absolute',
     right: spacing.space4,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     backgroundColor: colors.primary600,
     alignItems: 'center',
     justifyContent: 'center',
-    ...shadows.shadowXl,
+    // Refined lift: softer, indigo-tinted shadow rather than the heavy black shadowXl.
+    ...shadows.shadowLg,
+    shadowColor: colors.primary700,
     zIndex: 1000,
   },
   fabPressed: { transform: [{ scale: 0.94 }] },

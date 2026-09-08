@@ -16,7 +16,7 @@
  */
 
 import { StatusBar, StyleSheet, useColorScheme, View } from 'react-native';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { SafeAreaProvider, initialWindowMetrics } from 'react-native-safe-area-context';
 import { LanguageProvider } from '@context/LanguageContext';
 import { AuthProvider } from '@context/AuthContext';
 import RootNavigator from '@navigation/RootNavigator';
@@ -26,8 +26,14 @@ function App() {
   const isDarkMode = useColorScheme() === 'dark';
 
   return (
-    <SafeAreaProvider>
-      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
+    // initialWindowMetrics seeds the safe-area insets synchronously on the first frame. Without
+    // it, insets.top is 0 until the provider measures, so on edge-to-edge Android (this app sets
+    // edgeToEdgeEnabled=true) the first paint slips content under the status bar before snapping
+    // down — the overlap seen on the dashboard. Seeding it fixes that flash deterministically.
+    <SafeAreaProvider initialMetrics={initialWindowMetrics}>
+      {/* translucent + transparent so behaviour is deterministic under edge-to-edge: the app draws
+          behind the bar and each screen's safe-area padding (insets.top) reserves the space. */}
+      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} translucent backgroundColor="transparent" />
       <LanguageProvider>
         <AuthProvider>
           <View style={styles.root}>
