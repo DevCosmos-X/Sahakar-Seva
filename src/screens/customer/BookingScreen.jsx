@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
-import { View, Text, Pressable, ScrollView, StyleSheet, ActivityIndicator, Image, Alert, Animated, Easing } from 'react-native';
+import { View, Text, Pressable, ScrollView, StyleSheet, ActivityIndicator, Image, Alert, Animated, Easing, TextInput, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { launchCamera, launchImageLibrary } from 'react-native-image-picker';
 import {
   Calendar, Clock, CloudRain, Check, ArrowLeft, ArrowRight,
   Sparkles, Receipt, Navigation, ShieldCheck, Printer, ClipboardList,
   Camera, ImagePlus, X, Copy, Home, Heart,
+  Search, SlidersHorizontal, Users, Leaf, IndianRupee, ChevronRight,
 } from 'lucide-react-native';
 import { mockServices, currentWeather } from '@data/mockServices';
 import { addBooking, resolveCustomerId } from '@data/mockBookings';
@@ -14,7 +15,7 @@ import { shareReceipt } from '@utils/receipt';
 import { useAuth } from '@context/AuthContext';
 import { useLanguage } from '@context/LanguageContext';
 import useSpeechToText from '@hooks/useSpeechToText';
-import { ScreenContainer, ServiceGrid, Chip, ChipRow, Confetti } from '@components/app';
+import { ScreenContainer, Chip, ChipRow, Confetti } from '@components/app';
 import { serviceIcon } from '@components/icons';
 import { TextArea } from '@components/ui/Input';
 import { FairnessBadge } from '@components/ui/Badge';
@@ -80,6 +81,39 @@ function calcBilling(basePrice, weatherMultiplier, isRuralOrDistant = false) {
 
 const STEP_LABELS = ['Service', 'Describe', 'Schedule', 'Review'];
 
+// PRESENTATION-ONLY short descriptions for the Step-1 service cards, keyed by service id.
+// These do NOT modify the backend service data (mockServices keeps its own `description`).
+const FRONT_DESC = {
+  plumbing: 'Fix leaks, pipes & more',
+  electrical: 'Wiring, repairs & installations',
+  cleaning: 'Home & office cleaning',
+  painting: 'Interior & exterior painting',
+  carpentry: 'Furniture, doors & woodwork',
+  'ac-repair': 'Service, repair & installation',
+  'pest-control': 'Get rid of pests safely',
+  'appliance-repair': 'TV, fridge, washer & more',
+};
+
+// PRESENTATION-ONLY trust/value indicators (no backend data).
+const TRUST_ITEMS = [
+  { icon: ShieldCheck, label: 'Verified\nProfessionals', bg: '#ecfdf5', fg: '#059669' },
+  { icon: IndianRupee, label: 'Transparent\nPricing', bg: '#fff7ed', fg: '#ea580c' },
+  { icon: Users, label: 'Community\nTrusted', bg: '#f5f3ff', fg: '#7c3aed' },
+  { icon: Leaf, label: 'Quality\nAssured', bg: '#eff6ff', fg: '#2563eb' },
+];
+
+// PRESENTATION-ONLY pastel tint per service id for the card icon area.
+const SERVICE_TINT = {
+  plumbing: '#eff6ff',
+  electrical: '#fffbeb',
+  cleaning: '#ecfdf5',
+  painting: '#f5f3ff',
+  carpentry: '#fff7ed',
+  'ac-repair': '#ecfeff',
+  'pest-control': '#fef2f2',
+  'appliance-repair': '#eef2ff',
+};
+
 // LanguageContext stores a code ('en'|'hi'|'bn'|null); getServiceDiagnosis wants the English
 // language NAME ('English'|'Hindi'|'Bengali'). This mapping is the fix for the web app's
 // hardcoded-'English' diagnosis bug (BookingPage.jsx:107) — the RN app passes the user's
@@ -88,8 +122,14 @@ const LANG_NAME = { en: 'English', hi: 'Hindi', bn: 'Bengali' };
 
 export default function BookingScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
+  const { width: screenWidth } = useWindowDimensions();
   const { user, profile } = useAuth();
   const { language } = useLanguage();
+
+  // Square service tile size, computed dynamically so exactly 2 cards fit per row and stay a
+  // true 1:1 square on any phone width: (screen - side padding*2 - gap) / 2.
+  // Side padding is scrollContent's spacing.space4 (16) each side; gap is spacing.space3 (12).
+  const svcCardSize = Math.floor((screenWidth - spacing.space4 * 2 - spacing.space3) / 2);
   const preselected = route?.params?.service;
   const preselectedDesc = route?.params?.desc;
 
@@ -102,6 +142,8 @@ export default function BookingScreen({ navigation, route }) {
   const [time, setTime] = useState('10:00 AM');
   const [address, setAddress] = useState(profile?.address || '12, Sector 45, Gurugram, Haryana');
   const [confirmedBooking, setConfirmedBooking] = useState(null);
+  // Frontend-only client-side search over the existing mockServices list (no backend query).
+  const [serviceQuery, setServiceQuery] = useState('');
   // AI diagnosis (Phase 9, Groq-backed). Photo/vision input wired in Phase 10a via
   // react-native-image-picker — a selected photo feeds getServiceDiagnosis's vision path.
   const [aiDiagnosis, setAiDiagnosis] = useState(null);
@@ -227,8 +269,14 @@ export default function BookingScreen({ navigation, route }) {
           const done = step > n;
           return (
             <View key={label} style={styles.stepItem}>
-              <View style={[styles.stepCircle, active && styles.stepCircleActive, done && styles.stepCircleDone]}>
-                {done ? <Check size={13} color={colors.white} /> : <Text style={[styles.stepNum, (active || done) && styles.stepNumActive]}>{n}</Text>}
+              <View style={styles.stepRow}>
+                {/* left connector (hidden on the first step) */}
+                <View style={[styles.stepLine, i === 0 && styles.stepLineHidden, done && styles.stepLineDone]} />
+                <View style={[styles.stepCircle, active && styles.stepCircleActive, done && styles.stepCircleDone]}>
+                  {done ? <Check size={13} color={colors.white} strokeWidth={3} /> : <Text style={[styles.stepNum, (active || done) && styles.stepNumActive]}>{n}</Text>}
+                </View>
+                {/* right connector (hidden on the last step) */}
+                <View style={[styles.stepLine, i === STEP_LABELS.length - 1 && styles.stepLineHidden, step > n && styles.stepLineDone]} />
               </View>
               <Text style={[styles.stepLabel, active && styles.stepLabelActive]}>{label}</Text>
             </View>
@@ -242,21 +290,104 @@ export default function BookingScreen({ navigation, route }) {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        {/* STEP 1 — choose service */}
+        {/* STEP 1 — choose service (premium redesign, frontend-only) */}
         {step === 1 && (
           <View>
-            <Text style={styles.h2}>What service do you need?</Text>
-            <Text style={styles.sub}>Select a verified cooperative service category</Text>
-            <View style={{ marginTop: spacing.space4 }}>
-              <ServiceGrid
-                services={mockServices}
-                columns={4}
-                showPrice
-                onSelect={(s) => {
-                  setSelectedService(s.id);
-                  setStep(2);
-                }}
-              />
+            {/* Header with a very soft purple glow behind it */}
+            <View style={styles.s1HeaderWrap}>
+              <View pointerEvents="none" style={styles.s1Glow} />
+              <Text style={styles.s1Title}>What service do you need?</Text>
+              <Text style={styles.s1Sub}>Select a verified cooperative service category</Text>
+            </View>
+
+            {/* Trust / value indicators (presentation-only) */}
+            <View style={styles.trustRow}>
+              {TRUST_ITEMS.map(({ icon: TIcon, label, bg, fg }) => (
+                <View key={label} style={styles.trustItem}>
+                  <View style={[styles.trustIcon, { backgroundColor: bg }]}>
+                    <TIcon size={17} color={fg} strokeWidth={2.2} />
+                  </View>
+                  <Text style={styles.trustLabel}>{label}</Text>
+                </View>
+              ))}
+            </View>
+
+            {/* Search + filter (client-side filter over the existing list) */}
+            <View style={styles.searchRow}>
+              <View style={styles.searchBox}>
+                <Search size={18} color={colors.gray400} strokeWidth={2.2} />
+                <TextInput
+                  style={styles.searchInput}
+                  value={serviceQuery}
+                  onChangeText={setServiceQuery}
+                  placeholder="Search for a service..."
+                  placeholderTextColor={colors.gray400}
+                  returnKeyType="search"
+                />
+                {serviceQuery.length > 0 && (
+                  <Pressable onPress={() => setServiceQuery('')} hitSlop={8} accessibilityLabel="Clear search">
+                    <X size={16} color={colors.gray400} />
+                  </Pressable>
+                )}
+              </View>
+              <View style={styles.filterBtn}>
+                <SlidersHorizontal size={18} color={colors.primary600} strokeWidth={2.2} />
+              </View>
+            </View>
+
+            {/* Premium 2-column service grid — same data + same selection behaviour */}
+            <View style={styles.svcGrid}>
+              {mockServices
+                .filter((s) => s.name.toLowerCase().includes(serviceQuery.trim().toLowerCase()))
+                .map((s) => {
+                  const SIcon = serviceIcon(s.icon);
+                  const selected = selectedService === s.id;
+                  const tint = SERVICE_TINT[s.id] || colors.gray50;
+                  return (
+                    <PressableScale
+                      key={s.id}
+                      style={[styles.svcCard, { width: svcCardSize, height: svcCardSize }, selected && styles.svcCardSelected]}
+                      onPress={() => { setSelectedService(s.id); setStep(2); }}
+                      accessibilityLabel={`${s.name}, starting from ₹${s.basePrice}`}
+                    >
+                      {selected && (
+                        <View style={styles.svcCheck}>
+                          <Check size={11} color={colors.white} strokeWidth={3} />
+                        </View>
+                      )}
+                      {/* TOP: icon + name + description */}
+                      <View style={styles.svcTop}>
+                        <View style={[styles.svcIconTile, { backgroundColor: tint }]}>
+                          <SIcon size={24} color={s.color} strokeWidth={2} />
+                        </View>
+                        <Text style={styles.svcCardName} numberOfLines={2}>{s.name}</Text>
+                        <Text style={styles.svcDesc} numberOfLines={2}>{FRONT_DESC[s.id] || ''}</Text>
+                      </View>
+                      {/* BOTTOM: price + arrow */}
+                      <View style={styles.svcFooter}>
+                        <View style={styles.svcPriceWrap}>
+                          <Text style={styles.svcFrom}>Starting from</Text>
+                          <Text style={styles.svcPrice}>₹{s.basePrice}</Text>
+                        </View>
+                        <View style={[styles.svcArrow, selected && styles.svcArrowSelected]}>
+                          <ArrowRight size={15} color={selected ? colors.white : colors.primary600} strokeWidth={2.4} />
+                        </View>
+                      </View>
+                    </PressableScale>
+                  );
+                })}
+            </View>
+
+            {/* Supporting Cooperatives banner (presentation-only) */}
+            <View style={styles.coopBanner}>
+              <View style={styles.coopIcon}>
+                <Leaf size={18} color={colors.success600} strokeWidth={2.2} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.coopTitle}>Supporting Cooperatives</Text>
+                <Text style={styles.coopSub}>Your booking helps local communities grow</Text>
+              </View>
+              <ChevronRight size={20} color={colors.primary400} strokeWidth={2.2} />
             </View>
           </View>
         )}
@@ -724,18 +855,79 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.gray200,
   },
-  stepItem: { flex: 1, alignItems: 'center', gap: 4 },
+  stepItem: { flex: 1, alignItems: 'center', gap: 5 },
+  stepRow: { flexDirection: 'row', alignItems: 'center', alignSelf: 'stretch' },
+  stepLine: { flex: 1, height: 2, backgroundColor: colors.gray200 },
+  stepLineHidden: { backgroundColor: 'transparent' },
+  stepLineDone: { backgroundColor: colors.primary400 },
   stepCircle: {
     width: 28, height: 28, borderRadius: 14,
-    backgroundColor: colors.gray200,
+    backgroundColor: colors.gray100,
     alignItems: 'center', justifyContent: 'center',
+    marginHorizontal: 2,
   },
   stepCircleActive: { backgroundColor: colors.primary600 },
-  stepCircleDone: { backgroundColor: colors.success500 },
-  stepNum: { fontSize: fontSizes.fsXs, fontWeight: fontWeights.fwBold, fontFamily: fontFamilies.interBold, color: colors.gray500 },
+  stepCircleDone: { backgroundColor: colors.primary400 },
+  stepNum: { fontSize: fontSizes.fsXs, fontWeight: fontWeights.fwBold, fontFamily: fontFamilies.interBold, color: colors.gray400 },
   stepNumActive: { color: colors.white },
-  stepLabel: { fontSize: 10, color: colors.gray400, fontFamily: fontFamilies.interMedium },
-  stepLabelActive: { color: colors.primary700, fontFamily: fontFamilies.interSemiBold },
+  stepLabel: { fontSize: 10.5, color: colors.gray400, fontFamily: fontFamilies.interMedium },
+  stepLabelActive: { color: colors.primary700, fontFamily: fontFamilies.interSemiBold, fontWeight: fontWeights.fwSemibold },
+
+  // ---- Step 1 (premium) ----
+  s1HeaderWrap: { position: 'relative', paddingTop: spacing.space2, marginBottom: spacing.space4 },
+  s1Glow: { position: 'absolute', top: -20, left: -30, width: 180, height: 180, borderRadius: 90, backgroundColor: colors.primary50, opacity: 0.7 },
+  s1Title: { fontSize: fontSizes.fs2xl, fontWeight: fontWeights.fwExtrabold, fontFamily: fontFamilies.interExtraBold, color: colors.gray900, letterSpacing: -0.5 },
+  s1Sub: { fontSize: fontSizes.fsSm, color: colors.gray500, fontFamily: fontFamilies.interMedium, marginTop: 4 },
+
+  trustRow: { flexDirection: 'row', gap: spacing.space2, marginBottom: spacing.space4 },
+  trustItem: { flex: 1, alignItems: 'center', gap: 5 },
+  trustIcon: { width: 40, height: 40, borderRadius: radii.radiusLg, alignItems: 'center', justifyContent: 'center' },
+  trustLabel: { fontSize: 9.5, lineHeight: 12, color: colors.gray600, fontFamily: fontFamilies.interSemiBold, fontWeight: fontWeights.fwSemibold, textAlign: 'center' },
+
+  searchRow: { flexDirection: 'row', gap: spacing.space2, marginBottom: spacing.space4 },
+  searchBox: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.space2,
+    paddingHorizontal: spacing.space3, height: 46, backgroundColor: colors.surfaceWhite,
+    borderRadius: radii.radiusLg, borderWidth: 1, borderColor: colors.gray200, ...shadows.shadowSm,
+  },
+  searchInput: { flex: 1, fontSize: fontSizes.fsSm, fontFamily: fontFamilies.interRegular, color: colors.gray900, padding: 0 },
+  filterBtn: {
+    width: 46, height: 46, borderRadius: radii.radiusLg, backgroundColor: colors.primary50,
+    borderWidth: 1, borderColor: colors.primary100, alignItems: 'center', justifyContent: 'center',
+  },
+
+  svcGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: spacing.space3 },
+  svcCard: {
+    // width/height are set inline to the dynamically-computed square size (svcCardSize) so the
+    // tile is a TRUE 1:1 square on any phone width and content is reflowed to fit within it.
+    backgroundColor: colors.surfaceWhite, borderRadius: radii.radiusXl,
+    padding: spacing.space3, borderWidth: 1, borderColor: colors.gray100, ...shadows.shadowSm,
+    justifyContent: 'space-between',
+  },
+  svcCardSelected: { borderColor: colors.primary400, borderWidth: 2, backgroundColor: '#faf5ff', ...shadows.shadowMd, shadowColor: colors.primary500 },
+  svcCheck: {
+    position: 'absolute', top: 8, right: 8, width: 18, height: 18, borderRadius: 9,
+    backgroundColor: colors.primary600, alignItems: 'center', justifyContent: 'center', zIndex: 2,
+  },
+  svcTop: {},
+  svcIconTile: { width: 40, height: 40, borderRadius: radii.radiusLg, alignItems: 'center', justifyContent: 'center', marginBottom: spacing.space2 },
+  svcCardName: { fontSize: fontSizes.fsBase, fontWeight: fontWeights.fwBold, fontFamily: fontFamilies.interBold, color: colors.gray900, lineHeight: 19 },
+  svcDesc: { fontSize: fontSizes.fsXs, color: colors.gray500, fontFamily: fontFamilies.interRegular, marginTop: 2, lineHeight: 15 },
+  svcFooter: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: spacing.space2 },
+  svcPriceWrap: { flexShrink: 1 },
+  svcFrom: { fontSize: 9.5, color: colors.gray400, fontFamily: fontFamilies.interMedium },
+  svcPrice: { fontSize: fontSizes.fsLg, fontWeight: fontWeights.fwExtrabold, fontFamily: fontFamilies.interExtraBold, color: colors.gray900, marginTop: 1 },
+  svcArrow: { width: 30, height: 30, borderRadius: 15, backgroundColor: colors.primary50, alignItems: 'center', justifyContent: 'center' },
+  svcArrowSelected: { backgroundColor: colors.primary600 },
+
+  coopBanner: {
+    flexDirection: 'row', alignItems: 'center', gap: spacing.space3, marginTop: spacing.space4,
+    padding: spacing.space4, borderRadius: radii.radiusXl, backgroundColor: colors.primary50,
+    borderWidth: 1, borderColor: colors.primary100,
+  },
+  coopIcon: { width: 40, height: 40, borderRadius: radii.radiusFull, backgroundColor: colors.success50, alignItems: 'center', justifyContent: 'center' },
+  coopTitle: { fontSize: fontSizes.fsSm, fontWeight: fontWeights.fwBold, fontFamily: fontFamilies.interBold, color: colors.primary800 },
+  coopSub: { fontSize: fontSizes.fsXs, color: colors.gray600, fontFamily: fontFamilies.interRegular, marginTop: 1 },
 
   h2: { fontSize: fontSizes.fsXl, fontWeight: fontWeights.fwBold, fontFamily: fontFamilies.interBold, color: colors.gray900 },
   sub: { fontSize: fontSizes.fsSm, color: colors.gray500, fontFamily: fontFamilies.interRegular, marginTop: 2 },
