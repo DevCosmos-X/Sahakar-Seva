@@ -19,6 +19,8 @@ import {
   Wallet,
   ClipboardList,
   TrendingUp,
+  Landmark,
+  ArrowRight,
 } from 'lucide-react-native';
 import { useAuth } from '@context/AuthContext';
 import { CustomerIllustration, WorkerIllustration } from '@components/illustrations/RoleIllustrations';
@@ -119,7 +121,7 @@ export default function LoginScreen({ navigation }) {
   };
 
   const roleWord =
-    selectedRole === 'customer' ? 'ग्राहक' : selectedRole === 'worker' ? 'श्रमिक' : 'Admin';
+    selectedRole === 'customer' ? 'Customer' : selectedRole === 'worker' ? 'Worker' : 'Admin';
 
   return (
     <ScrollView
@@ -257,12 +259,25 @@ export default function LoginScreen({ navigation }) {
             </View>
           </View>
 
+          {/* Official administrative portal — visually distinct full-width purple card.
+              Same handler (handleRoleSelect('admin')) and navigation as before, unchanged. */}
           <Pressable
-            style={({ pressed }) => [styles.adminLink, pressed && styles.adminLinkPressed]}
+            style={({ pressed }) => [styles.adminCard, pressed && styles.adminCardPressed]}
             onPress={() => handleRoleSelect('admin')}
+            accessibilityRole="button"
+            accessibilityLabel="Admin / Prashasan Access — official administrative portal"
           >
-            <Shield size={14} color={colors.gray500} strokeWidth={2} />
-            <Text style={styles.adminLinkText}>Admin / Prashasan Access</Text>
+            <View style={styles.adminIconWrap}>
+              <Landmark size={24} color={colors.white} strokeWidth={2.1} />
+            </View>
+            <View style={styles.adminTextWrap}>
+              <Text style={styles.adminEyebrow}>FOR OFFICIAL USE</Text>
+              <Text style={styles.adminTitle}>Admin / Prashasan Access</Text>
+              <Text style={styles.adminDesc}>Manage users, services &amp; platform</Text>
+            </View>
+            <View style={styles.adminArrow}>
+              <ArrowRight size={20} color={colors.primary700} strokeWidth={2.4} />
+            </View>
           </Pressable>
 
           {/* Helpline call card */}
@@ -691,26 +706,64 @@ const styles = StyleSheet.create({
   },
 
   // ---- Admin link ----
-  adminLink: {
+  // ---- Official administrative portal card ----
+  adminCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.space2,
-    paddingVertical: spacing.space3,
-    paddingHorizontal: spacing.space4,
-    borderRadius: radii.radiusMd,
+    gap: spacing.space3,
+    marginTop: spacing.space4,
+    padding: spacing.space4,
+    borderRadius: radii.radiusXl,
+    backgroundColor: colors.primary700,
     borderWidth: 1,
-    borderColor: colors.gray200,
+    borderColor: colors.primary500,
+    ...shadows.shadowLg,
+    shadowColor: colors.primary700,
+  },
+  adminCardPressed: {
+    backgroundColor: colors.primary800,
+  },
+  adminIconWrap: {
+    width: 48,
+    height: 48,
+    borderRadius: radii.radiusFull,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.28)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  adminTextWrap: {
+    flex: 1,
+  },
+  adminEyebrow: {
+    fontSize: 10,
+    letterSpacing: 1.2,
+    color: colors.primary200,
+    fontFamily: fontFamilies.interSemiBold,
+    fontWeight: fontWeights.fwSemibold,
+    marginBottom: 2,
+  },
+  adminTitle: {
+    fontSize: fontSizes.fsBase,
+    color: colors.white,
+    fontFamily: fontFamilies.interBold,
+    fontWeight: fontWeights.fwBold,
+  },
+  adminDesc: {
+    fontSize: fontSizes.fsXs,
+    color: colors.primary100,
+    fontFamily: fontFamilies.interRegular,
+    marginTop: 2,
+  },
+  adminArrow: {
+    width: 36,
+    height: 36,
+    borderRadius: radii.radiusFull,
     backgroundColor: colors.white,
-    alignSelf: 'center',
-  },
-  adminLinkPressed: {
-    backgroundColor: colors.gray50,
-  },
-  adminLinkText: {
-    fontSize: fontSizes.fsSm,
-    color: colors.gray600,
-    fontFamily: fontFamilies.interMedium,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...shadows.shadowSm,
   },
 
   // ---- Helpline card ----

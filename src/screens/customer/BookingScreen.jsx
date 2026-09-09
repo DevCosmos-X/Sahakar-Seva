@@ -6,7 +6,7 @@ import {
   Calendar, Clock, CloudRain, Check, ArrowLeft, ArrowRight,
   Sparkles, Receipt, Navigation, ShieldCheck, Printer, ClipboardList,
   Camera, ImagePlus, X, Copy, Home, Heart,
-  Search, SlidersHorizontal, Users, Leaf, IndianRupee, ChevronRight,
+  Search, SlidersHorizontal, Users, Leaf, IndianRupee, ChevronRight, Bot,
 } from 'lucide-react-native';
 import { mockServices, currentWeather } from '@data/mockServices';
 import { addBooking, resolveCustomerId } from '@data/mockBookings';
@@ -69,6 +69,27 @@ const TIME_SLOTS = [
   { label: '🌇 05:00 PM', val: '05:00 PM' },
 ];
 
+/**
+ * toggleTag — frontend-only Set-style toggle over the comma-separated description string.
+ * The quick-select tags are stored inline in the existing `description` state (unchanged data
+ * format). This adds the tag if it isn't already present as a segment, or removes it if it is —
+ * so re-tapping deselects (never duplicates), and multiple tags can coexist. Result is clamped
+ * to the 300-char limit.
+ */
+function toggleTag(desc, tag) {
+  const segments = (desc || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const idx = segments.indexOf(tag);
+  if (idx >= 0) {
+    segments.splice(idx, 1); // already selected → remove (deselect)
+  } else {
+    segments.push(tag); // not selected → add
+  }
+  return segments.join(', ').slice(0, DESC_MAX);
+}
+
 // Ported verbatim from web.
 function calcBilling(basePrice, weatherMultiplier, isRuralOrDistant = false) {
   const adjusted = Math.round(basePrice * weatherMultiplier);
@@ -80,6 +101,20 @@ function calcBilling(basePrice, weatherMultiplier, isRuralOrDistant = false) {
 }
 
 const STEP_LABELS = ['Service', 'Describe', 'Schedule', 'Review'];
+
+// Frontend-only description limit (matches the "/300" counter shown in the UI). Enforced at the
+// input level via TextInput maxLength and clamped for programmatic writes (quick-select + mic).
+const DESC_MAX = 300;
+
+// PRESENTATION-ONLY short descriptions for quick-select cards, keyed by the label text (the part
+// after the leading emoji). Falls back to no description if a tag isn't listed. This adds no data
+// to the tag values sent into the description — it's purely a display subtitle.
+const QS_DESC = {
+  'Pipe Leakage': 'Water leaking from pipes',
+  'Tap / Faucet Repair': 'Fix or replace taps and faucets',
+  'Drain Blockage': 'Clogged sinks, drains or toilets',
+  'General Plumbing Check': 'Inspection and maintenance',
+};
 
 // PRESENTATION-ONLY short descriptions for the Step-1 service cards, keyed by service id.
 // These do NOT modify the backend service data (mockServices keeps its own `description`).
@@ -156,7 +191,9 @@ export default function BookingScreen({ navigation, route }) {
   // is already typed. Degrades gracefully: if unavailable/denied, the mic shows a hint via `stt.error`.
   const stt = useSpeechToText({
     language,
-    onFinalResult: (text) => setDescription((prev) => (prev ? `${prev} ${text}` : text)),
+    // Append transcription, but clamp the combined result to the 300-char limit so voice input
+    // can never push the description past the maximum.
+    onFinalResult: (text) => setDescription((prev) => (prev ? `${prev} ${text}` : text).slice(0, DESC_MAX)),
   });
 
   // React to a new route param (e.g. tapping a different service on the dashboard while the
@@ -392,32 +429,72 @@ export default function BookingScreen({ navigation, route }) {
           </View>
         )}
 
-        {/* STEP 2 — describe */}
+        {/* STEP 2 — describe (premium redesign, frontend-only) */}
         {step === 2 && (
           <View>
-            <View style={styles.serviceHead}>
-              <View style={[styles.serviceHeadIcon, { backgroundColor: service.color + '1A' }]}>
-                <Icon size={26} color={service.color} />
+            {/* Premium service header */}
+            <View style={styles.s2Head}>
+              <View style={[styles.s2HeadIcon, { backgroundColor: `${service.color}1F` }]}>
+                <Icon size={26} color={service.color} strokeWidth={2.1} />
               </View>
               <View style={styles.serviceHeadText}>
-                <Text style={styles.h2}>{service.name}</Text>
-                <Text style={styles.sub}>Tell us about the issue or pick a quick tag</Text>
+                <Text style={styles.s2Title}>{service.name}</Text>
+                <Text style={styles.s2Sub}>Tell us about the issue so we can find the right expert for you.</Text>
               </View>
             </View>
 
-            <Text style={styles.label}>Quick select</Text>
-            <ChipRow wrap contentStyle={{ marginBottom: spacing.space4 }}>
-              {currentTags.map((tag) => (
-                <Chip key={tag} label={tag} onPress={() => setDescription((prev) => (prev ? `${prev}, ${tag}` : tag))} />
-              ))}
-            </ChipRow>
+            {/* Quick select — 2-column cards (same append onPress + same tag values) */}
+            <Text style={styles.s2Section}>Quick select</Text>
+            <Text style={styles.s2SectionSub}>Choose the option that best matches your issue</Text>
+            <View style={styles.qsGrid}>
+              {currentTags.map((tag) => {
+                // Split the leading emoji (icon) from the label text for display only —
+                // the FULL `tag` string is still what gets appended to the description.
+                const firstSpace = tag.indexOf(' ');
+                const emoji = firstSpace > 0 ? tag.slice(0, firstSpace) : '';
+                const labelText = firstSpace > 0 ? tag.slice(firstSpace + 1) : tag;
+                // Selected only when the tag exists as a whole comma-separated segment (matches
+                // toggleTag), so it flips off correctly on deselect and never false-matches.
+                const picked = description.split(',').map((sgmt) => sgmt.trim()).includes(tag);
+                return (
+                  <PressableScale
+                    key={tag}
+                    style={[styles.qsCard, picked && styles.qsCardSelected]}
+                    onPress={() => setDescription((prev) => toggleTag(prev, tag))}
+                    accessibilityLabel={labelText}
+                  >
+                    {picked && (
+                      <View style={styles.qsCheck}>
+                        <Check size={11} color={colors.white} strokeWidth={3} />
+                      </View>
+                    )}
+                    <View style={styles.qsIconTile}>
+                      <Text style={styles.qsEmoji}>{emoji}</Text>
+                    </View>
+                    <Text style={styles.qsLabel} numberOfLines={2}>{labelText}</Text>
+                    {QS_DESC[labelText] ? (
+                      <Text style={styles.qsCardDesc} numberOfLines={2}>{QS_DESC[labelText]}</Text>
+                    ) : null}
+                  </PressableScale>
+                );
+              })}
+            </View>
 
+            {/* Describe your issue */}
+            <View style={styles.descHeadRow}>
+              <Text style={styles.s2Section}>
+                Describe your issue <Text style={styles.optional}>(optional)</Text>
+              </Text>
+              <Text style={[styles.charCount, description.length >= DESC_MAX && styles.charCountMax]}>
+                {Math.min(description.length, DESC_MAX)}/{DESC_MAX}
+              </Text>
+            </View>
             <TextArea
-              label="Describe your issue (optional)"
               value={stt.listening && stt.partial ? `${description}${description ? ' ' : ''}${stt.partial}` : description}
               onChangeText={setDescription}
               placeholder="e.g. Kitchen sink is leaking, water dripping below the pipe…"
               rows={3}
+              maxLength={DESC_MAX}
               showMic
               micActive={stt.listening}
               onMicClick={() => (stt.listening ? stt.stop() : stt.start())}
@@ -432,7 +509,12 @@ export default function BookingScreen({ navigation, route }) {
             )}
 
             {/* Photo attach (Phase 10a, react-native-image-picker) — feeds the Groq vision model */}
-            <Text style={[styles.label, { marginTop: spacing.space4 }]}>Add a photo (optional)</Text>
+            <View style={[styles.descHeadRow, { marginTop: spacing.space5 }]}>
+              <Text style={styles.s2Section}>
+                Add a photo <Text style={styles.optional}>(optional)</Text>
+              </Text>
+            </View>
+            <Text style={styles.s2SectionSub}>A photo helps us understand the issue better</Text>
             {photo ? (
               <View style={styles.photoPreviewWrap}>
                 <Image source={{ uri: photo.uri }} style={styles.photoPreview} />
@@ -442,37 +524,53 @@ export default function BookingScreen({ navigation, route }) {
               </View>
             ) : (
               <View style={styles.photoBtnRow}>
-                <Pressable style={styles.photoBtn} onPress={pickFromCamera}>
-                  <Camera size={18} color={colors.primary600} />
-                  <Text style={styles.photoBtnText}>Camera</Text>
-                </Pressable>
-                <Pressable style={styles.photoBtn} onPress={pickFromGallery}>
-                  <ImagePlus size={18} color={colors.primary600} />
-                  <Text style={styles.photoBtnText}>Gallery</Text>
-                </Pressable>
+                <PressableScale style={styles.photoBtn2} onPress={pickFromCamera} accessibilityLabel="Camera">
+                  <View style={styles.photoBtn2Icon}>
+                    <Camera size={24} color={colors.primary600} strokeWidth={2} />
+                  </View>
+                  <Text style={styles.photoBtn2Text}>Camera</Text>
+                </PressableScale>
+                <PressableScale style={styles.photoBtn2} onPress={pickFromGallery} accessibilityLabel="Gallery">
+                  <View style={styles.photoBtn2Icon}>
+                    <ImagePlus size={24} color={colors.primary600} strokeWidth={2} />
+                  </View>
+                  <Text style={styles.photoBtn2Text}>Gallery</Text>
+                </PressableScale>
               </View>
             )}
 
-            {/* AI Smart Diagnosis — Groq-backed. Text (gpt-oss-20b) or vision (qwen3.6-27b) when a
-                photo is attached. */}
-            <Pressable
-              style={[styles.aiBtn, diagnosing && styles.aiBtnBusy]}
+            {/* AI Smart Diagnosis — premium card. Groq-backed (text or vision when a photo is
+                attached). Same runAiDiagnosis handler + disabled/loading behaviour. */}
+            <PressableScale
+              style={[styles.aiCard, diagnosing && styles.aiCardBusy]}
               onPress={runAiDiagnosis}
               disabled={diagnosing}
+              accessibilityLabel="AI Smart Diagnosis"
             >
-              {diagnosing ? (
-                <ActivityIndicator size="small" color={colors.primary600} />
-              ) : (
-                <Sparkles size={18} color={colors.primary600} />
-              )}
-              <Text style={styles.aiBtnText}>
-                {diagnosing ? 'Analyzing your issue…' : photo ? 'AI Diagnosis with Photo' : 'AI Smart Diagnosis'}
-              </Text>
-            </Pressable>
-            <Text style={styles.aiHint}>
-              Get an instant expert read on the likely cause, urgency, and repair time.
-              {photo ? ' Your photo will be analyzed too.' : ' Attach a photo for a sharper diagnosis.'}
-            </Text>
+              <View style={styles.aiCardIcon}>
+                {diagnosing ? (
+                  <ActivityIndicator size="small" color={colors.primary600} />
+                ) : (
+                  <Bot size={24} color={colors.primary600} strokeWidth={2.1} />
+                )}
+              </View>
+              <View style={{ flex: 1 }}>
+                <View style={styles.aiCardTitleRow}>
+                  <Text style={styles.aiCardTitle}>
+                    {diagnosing ? 'Analyzing your issue…' : photo ? 'AI Diagnosis with Photo' : 'AI Smart Diagnosis'}
+                  </Text>
+                  <View style={styles.aiBadge}>
+                    <Sparkles size={10} color={colors.primary700} strokeWidth={2.4} />
+                    <Text style={styles.aiBadgeText}>Powered by AI</Text>
+                  </View>
+                </View>
+                <Text style={styles.aiCardText}>
+                  Get an instant expert read on the likely cause, urgency, and repair time.
+                  {photo ? ' Your photo will be analyzed too.' : ' Attach a photo for a sharper diagnosis.'}
+                </Text>
+              </View>
+              <ArrowRight size={18} color={colors.primary600} strokeWidth={2.4} />
+            </PressableScale>
 
             {aiDiagnosis && (
               <View style={styles.aiResultCard}>
@@ -804,6 +902,16 @@ function BookingConfirmation({ booking, insetsTop, onTrack, onShare, onViewBooki
 function PressableScale({ children, style, onPress, accessibilityLabel }) {
   const scale = useRef(new Animated.Value(1)).current;
   const to = (v) => Animated.spring(scale, { toValue: v, friction: 6, tension: 180, useNativeDriver: true }).start();
+  // The SIZING props (width / flex / margins) must sit on the OUTER Pressable so the element
+  // participates in the parent flex/grid layout — otherwise the Pressable is width-less and the
+  // 2-column cards collapse into a vertical stack. Everything else (padding, background, border,
+  // alignment, gap) stays on the inner Animated.View so the card's content lays out exactly as
+  // authored. We derive the outer box style by picking only the sizing keys from `style`.
+  const flat = StyleSheet.flatten(style) || {};
+  const outerBox = {};
+  ['width', 'height', 'minWidth', 'maxWidth', 'flex', 'flexBasis', 'flexGrow', 'flexShrink', 'alignSelf', 'margin', 'marginTop', 'marginBottom', 'marginLeft', 'marginRight', 'marginHorizontal', 'marginVertical'].forEach((k) => {
+    if (flat[k] !== undefined) outerBox[k] = flat[k];
+  });
   return (
     <Pressable
       onPress={onPress}
@@ -811,8 +919,9 @@ function PressableScale({ children, style, onPress, accessibilityLabel }) {
       onPressOut={() => to(1)}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
+      style={outerBox}
     >
-      <Animated.View style={[style, { transform: [{ scale }] }]}>{children}</Animated.View>
+      <Animated.View style={[style, styles.pressableScaleInner, { transform: [{ scale }] }]}>{children}</Animated.View>
     </Pressable>
   );
 }
@@ -937,6 +1046,60 @@ const styles = StyleSheet.create({
   serviceHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.space3, marginBottom: spacing.space4 },
   serviceHeadIcon: { width: 52, height: 52, borderRadius: radii.radiusLg, alignItems: 'center', justifyContent: 'center' },
   serviceHeadText: { flex: 1 },
+
+  // ---- Step 2 (premium) ----
+  s2Head: { flexDirection: 'row', alignItems: 'center', gap: spacing.space3, marginBottom: spacing.space5 },
+  s2HeadIcon: { width: 56, height: 56, borderRadius: radii.radiusXl, alignItems: 'center', justifyContent: 'center', ...shadows.shadowSm },
+  s2Title: { fontSize: fontSizes.fs2xl, fontWeight: fontWeights.fwExtrabold, fontFamily: fontFamilies.interExtraBold, color: colors.gray900, letterSpacing: -0.5 },
+  s2Sub: { fontSize: fontSizes.fsSm, color: colors.gray500, fontFamily: fontFamilies.interRegular, marginTop: 3, lineHeight: 18 },
+  s2Section: { fontSize: fontSizes.fsBase, fontWeight: fontWeights.fwBold, fontFamily: fontFamilies.interBold, color: colors.gray900 },
+  s2SectionSub: { fontSize: fontSizes.fsXs, color: colors.gray500, fontFamily: fontFamilies.interRegular, marginTop: 2, marginBottom: spacing.space3 },
+  optional: { fontSize: fontSizes.fsSm, fontFamily: fontFamilies.interRegular, color: colors.gray400 },
+
+  descHeadRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.space2 },
+  charCount: { fontSize: fontSizes.fsXs, color: colors.gray400, fontFamily: fontFamilies.interMedium },
+  charCountMax: { color: colors.primary600, fontFamily: fontFamilies.interSemiBold, fontWeight: fontWeights.fwSemibold },
+
+  // Inner view fills the outer Pressable's width so the card's own padding/border/background
+  // (carried in `style`) render across the full tile.
+  pressableScaleInner: { width: '100%' },
+
+  qsGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: spacing.space3, marginBottom: spacing.space5 },
+  qsCard: {
+    width: '48.5%', alignItems: 'flex-start', gap: spacing.space2,
+    padding: spacing.space4, backgroundColor: colors.surfaceWhite, borderRadius: radii.radiusXl,
+    borderWidth: 1, borderColor: colors.gray200, ...shadows.shadowSm,
+  },
+  qsCardSelected: { borderColor: colors.primary400, borderWidth: 2, backgroundColor: '#faf5ff' },
+  qsCheck: {
+    position: 'absolute', top: 8, right: 8, width: 20, height: 20, borderRadius: 10,
+    backgroundColor: colors.primary600, alignItems: 'center', justifyContent: 'center', zIndex: 2,
+  },
+  // Square icon container (icon on top; label + description sit underneath, per the reference).
+  qsIconTile: { width: 48, height: 48, borderRadius: radii.radiusLg, backgroundColor: colors.primary50, alignItems: 'center', justifyContent: 'center' },
+  qsEmoji: { fontSize: 24 },
+  qsLabel: { fontSize: fontSizes.fsSm, fontWeight: fontWeights.fwBold, fontFamily: fontFamilies.interBold, color: colors.gray900, lineHeight: 18 },
+  qsCardDesc: { fontSize: fontSizes.fsXs, color: colors.gray500, fontFamily: fontFamilies.interRegular, lineHeight: 15, marginTop: -2 },
+
+  photoBtn2: {
+    flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.space2, paddingVertical: spacing.space5,
+    backgroundColor: colors.surfaceWhite, borderRadius: radii.radiusXl, borderWidth: 1, borderColor: colors.primary100, ...shadows.shadowSm,
+  },
+  photoBtn2Icon: { width: 44, height: 44, borderRadius: radii.radiusLg, backgroundColor: colors.primary50, alignItems: 'center', justifyContent: 'center' },
+  photoBtn2Text: { fontSize: fontSizes.fsSm, fontWeight: fontWeights.fwSemibold, fontFamily: fontFamilies.interSemiBold, color: colors.primary600 },
+
+  aiCard: {
+    flexDirection: 'row', alignItems: 'center', gap: spacing.space3, marginTop: spacing.space5,
+    padding: spacing.space4, backgroundColor: '#f5f3ff', borderRadius: radii.radiusXl,
+    borderWidth: 1, borderColor: colors.primary100,
+  },
+  aiCardBusy: { opacity: 0.75 },
+  aiCardIcon: { width: 46, height: 46, borderRadius: radii.radiusLg, backgroundColor: colors.surfaceWhite, alignItems: 'center', justifyContent: 'center', ...shadows.shadowSm },
+  aiCardTitleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.space2, flexWrap: 'wrap' },
+  aiCardTitle: { fontSize: fontSizes.fsBase, fontWeight: fontWeights.fwBold, fontFamily: fontFamilies.interBold, color: colors.primary900 },
+  aiBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingVertical: 2, paddingHorizontal: 7, backgroundColor: colors.primary100, borderRadius: radii.radiusFull },
+  aiBadgeText: { fontSize: 9.5, fontFamily: fontFamilies.interBold, fontWeight: fontWeights.fwBold, color: colors.primary700 },
+  aiCardText: { fontSize: fontSizes.fsXs, color: colors.gray600, fontFamily: fontFamilies.interRegular, marginTop: 3, lineHeight: 16 },
 
   micHint: { fontSize: fontSizes.fsXs, color: colors.primary600, fontFamily: fontFamilies.interMedium, marginTop: spacing.space1 },
   micHintError: { fontSize: fontSizes.fsXs, color: colors.gray500, fontFamily: fontFamilies.interRegular, marginTop: spacing.space1, lineHeight: 16 },
