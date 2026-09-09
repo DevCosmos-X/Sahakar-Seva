@@ -3,10 +3,11 @@ import { View, Text, Pressable, ScrollView, StyleSheet, ActivityIndicator, Image
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { launchCamera, launchImageLibrary } from 'react-native-image-picker';
 import {
-  Calendar, Clock, CloudRain, Check, ArrowLeft, ArrowRight,
+  Calendar, Clock, Check, ArrowLeft, ArrowRight,
   Sparkles, Receipt, Navigation, ShieldCheck, Printer, ClipboardList,
   Camera, ImagePlus, X, Copy, Home, Heart,
   Search, SlidersHorizontal, Users, Leaf, IndianRupee, ChevronRight, Bot,
+  Umbrella, Zap, Sunrise, Sun, Sunset, MapPin,
 } from 'lucide-react-native';
 import { mockServices, currentWeather } from '@data/mockServices';
 import { addBooking, resolveCustomerId } from '@data/mockBookings';
@@ -15,7 +16,7 @@ import { shareReceipt } from '@utils/receipt';
 import { useAuth } from '@context/AuthContext';
 import { useLanguage } from '@context/LanguageContext';
 import useSpeechToText from '@hooks/useSpeechToText';
-import { ScreenContainer, Chip, ChipRow, Confetti } from '@components/app';
+import { ScreenContainer, Confetti } from '@components/app';
 import { serviceIcon } from '@components/icons';
 import { TextArea } from '@components/ui/Input';
 import { FairnessBadge } from '@components/ui/Badge';
@@ -68,6 +69,30 @@ const TIME_SLOTS = [
   { label: '☀️ 02:00 PM', val: '02:00 PM' },
   { label: '🌇 05:00 PM', val: '05:00 PM' },
 ];
+
+// PRESENTATION-ONLY metadata for the Step-3 quick-slot cards, keyed by the EXISTING slot `val`.
+// Adds an icon, a title/subtitle split, and a "recommended" flag — no new booking logic. The
+// selection still runs setTime(slot.val) with the same value. 10:00 AM is flagged recommended
+// because it is already the app's default selected time (useState('10:00 AM')).
+const SLOT_META = {
+  ASAP: { Icon: Zap, title: 'ASAP', note: '45 mins', sub: 'Get it done soon' },
+  '10:00 AM': { Icon: Sunrise, title: '10:00 AM', sub: 'Morning slot', recommended: true },
+  '02:00 PM': { Icon: Sun, title: '02:00 PM', sub: 'Afternoon slot' },
+  '05:00 PM': { Icon: Sunset, title: '05:00 PM', sub: 'Evening slot' },
+};
+
+// Frontend-only pretty date for display (e.g. "Today, 09 Sep 2026" + "Wednesday"). Formats the
+// EXISTING `date` string; falls back to the raw value if it can't be parsed. No data change.
+function formatServiceDate(dateStr) {
+  const d = new Date(dateStr);
+  if (isNaN(d)) return { primary: dateStr, weekday: '' };
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mon = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][d.getMonth()];
+  const weekday = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][d.getDay()];
+  const today = new Date();
+  const isToday = d.toDateString() === today.toDateString();
+  return { primary: `${isToday ? 'Today, ' : ''}${dd} ${mon} ${d.getFullYear()}`, weekday };
+}
 
 /**
  * toggleTag — frontend-only Set-style toggle over the comma-separated description string.
@@ -595,54 +620,113 @@ export default function BookingScreen({ navigation, route }) {
         {/* STEP 3 — schedule */}
         {step === 3 && (
           <View>
-            <Text style={styles.h2}>Schedule your service</Text>
-            <Text style={styles.sub}>Pick a convenient date and time slot</Text>
+            {/* Header */}
+            <View style={styles.s3HeaderRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.s2Title}>Schedule your service</Text>
+                <Text style={styles.s2Sub}>Pick a convenient date and time slot</Text>
+              </View>
+              <View style={styles.s3HeaderIcon}>
+                <Calendar size={26} color={colors.primary600} strokeWidth={2} />
+              </View>
+            </View>
 
+            {/* Rain / weather protection card (only when a weather adjustment is active) */}
             {weatherActive && (
-              <View style={styles.weatherCard}>
-                <CloudRain size={18} color={colors.info600} />
-                <View style={styles.weatherInfo}>
-                  <Text style={styles.weatherTitle}>{currentWeather.condition} Surge & Delay Protection</Text>
-                  <Text style={styles.weatherText}>
-                    Transparent weather adjustment: {weatherPct}% goes directly to the technician as bad-weather compensation.
+              <View style={styles.rainCard}>
+                <View style={styles.rainIcon}>
+                  <Umbrella size={22} color={colors.primary600} strokeWidth={2.1} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <View style={styles.rainTitleRow}>
+                    <Text style={styles.rainTitle}>Rain Protection Included</Text>
+                    <View style={styles.rainBadge}>
+                      <Text style={styles.rainBadgeText}>For your peace of mind</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.rainText}>
+                    If bad weather delays your service, {weatherPct}% of the adjustment goes directly to the technician.
                   </Text>
                 </View>
               </View>
             )}
 
-            <Text style={[styles.label, { marginTop: spacing.space4 }]}>Quick slot</Text>
-            <ChipRow wrap contentStyle={{ marginBottom: spacing.space4 }}>
-              {TIME_SLOTS.map((slot) => (
-                <Chip key={slot.val} label={slot.label} selected={time === slot.val} onPress={() => setTime(slot.val)} />
-              ))}
-            </ChipRow>
+            {/* Quick slots — premium selectable cards (same setTime handler + slot vals) */}
+            <View style={styles.descHeadRow}>
+              <Text style={styles.s2Section}>Quick slots</Text>
+              <Text style={styles.s3SectionHint}>Choose a time that works for you</Text>
+            </View>
+            <View style={styles.slotGrid}>
+              {TIME_SLOTS.map((slot) => {
+                const meta = SLOT_META[slot.val] || { Icon: Clock, title: slot.val, sub: '' };
+                const SlotIcon = meta.Icon;
+                const picked = time === slot.val;
+                return (
+                  <PressableScale
+                    key={slot.val}
+                    style={[styles.slotCard, picked && styles.slotCardSelected]}
+                    onPress={() => setTime(slot.val)}
+                    accessibilityLabel={`${meta.title} ${meta.sub}`}
+                  >
+                    {meta.recommended && (
+                      <View style={styles.slotRecommended}>
+                        <Text style={styles.slotRecommendedText}>Recommended</Text>
+                      </View>
+                    )}
+                    <View style={styles.slotTopRow}>
+                      <View style={[styles.slotIconTile, picked && styles.slotIconTileSelected]}>
+                        <SlotIcon size={20} color={picked ? colors.primary600 : colors.gray500} strokeWidth={2.1} />
+                      </View>
+                      <View style={[styles.slotRadio, picked && styles.slotRadioSelected]}>
+                        {picked && <View style={styles.slotRadioDot} />}
+                      </View>
+                    </View>
+                    <Text style={styles.slotTitle}>
+                      {meta.title}
+                      {meta.note ? <Text style={styles.slotNote}> ({meta.note})</Text> : null}
+                    </Text>
+                    <Text style={styles.slotSub}>{meta.sub}</Text>
+                  </PressableScale>
+                );
+              })}
+            </View>
 
-            <View style={styles.field}>
-              <View style={styles.fieldLabelRow}>
-                <Calendar size={14} color={colors.gray600} />
-                <Text style={styles.label}>Service date</Text>
+            {/* Date + Preferred time cards (display the real state; date is display-only as before,
+                time reflects the quick-slot selection). */}
+            <View style={styles.dtRow}>
+              <View style={styles.dtCard}>
+                <View style={styles.dtIcon}>
+                  <Calendar size={18} color={colors.primary600} strokeWidth={2.1} />
+                </View>
+                <Text style={styles.dtLabel}>Service date</Text>
+                <Text style={styles.dtValue} numberOfLines={1}>{formatServiceDate(date).primary}</Text>
+                {formatServiceDate(date).weekday ? <Text style={styles.dtSub}>{formatServiceDate(date).weekday}</Text> : null}
               </View>
-              <View style={styles.readonlyInput}>
-                <Text style={styles.readonlyText}>{date}</Text>
+              <View style={styles.dtCard}>
+                <View style={styles.dtIcon}>
+                  <Clock size={18} color={colors.primary600} strokeWidth={2.1} />
+                </View>
+                <Text style={styles.dtLabel}>Preferred time</Text>
+                <Text style={styles.dtValue} numberOfLines={1}>{time}</Text>
+                <Text style={styles.dtSub}>{SLOT_META[time]?.sub || 'Selected slot'}</Text>
               </View>
             </View>
 
-            <View style={styles.field}>
-              <View style={styles.fieldLabelRow}>
-                <Clock size={14} color={colors.gray600} />
-                <Text style={styles.label}>Selected time</Text>
+            {/* Service location — premium card wrapping the existing editable address input */}
+            <View style={styles.locCard}>
+              <View style={styles.locIcon}>
+                <MapPin size={20} color={colors.primary600} strokeWidth={2.1} />
               </View>
-              <View style={styles.readonlyInput}>
-                <Text style={styles.readonlyText}>{time}</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.locLabel}>Service location</Text>
+                <TextArea
+                  value={address}
+                  onChangeText={setAddress}
+                  rows={2}
+                  style={styles.locInput}
+                />
               </View>
             </View>
-
-            <TextArea
-              label="Service address"
-              value={address}
-              onChangeText={setAddress}
-              rows={2}
-            />
           </View>
         )}
 
@@ -1142,6 +1226,56 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: colors.danger200,
   },
   aiErrorText: { fontSize: fontSizes.fsXs, color: colors.danger700, fontFamily: fontFamilies.interRegular, lineHeight: 17 },
+
+  // ---- Step 3 (premium schedule) ----
+  s3HeaderRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.space3, marginBottom: spacing.space4 },
+  s3HeaderIcon: { width: 52, height: 52, borderRadius: radii.radiusXl, backgroundColor: colors.primary50, alignItems: 'center', justifyContent: 'center', ...shadows.shadowSm },
+  s3SectionHint: { fontSize: fontSizes.fsXs, color: colors.gray500, fontFamily: fontFamilies.interRegular, flexShrink: 1, textAlign: 'right' },
+
+  rainCard: {
+    flexDirection: 'row', gap: spacing.space3, marginBottom: spacing.space5,
+    padding: spacing.space4, borderRadius: radii.radiusXl, backgroundColor: '#f5f3ff',
+    borderWidth: 1, borderColor: colors.primary100,
+  },
+  rainIcon: { width: 44, height: 44, borderRadius: radii.radiusLg, backgroundColor: colors.surfaceWhite, alignItems: 'center', justifyContent: 'center', ...shadows.shadowSm },
+  rainTitleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.space2, flexWrap: 'wrap' },
+  rainTitle: { fontSize: fontSizes.fsBase, fontWeight: fontWeights.fwBold, fontFamily: fontFamilies.interBold, color: colors.primary800 },
+  rainBadge: { paddingVertical: 2, paddingHorizontal: 8, backgroundColor: colors.success50, borderRadius: radii.radiusFull, borderWidth: 1, borderColor: '#a7f3d0' },
+  rainBadgeText: { fontSize: 9.5, fontFamily: fontFamilies.interSemiBold, fontWeight: fontWeights.fwSemibold, color: colors.success700 },
+  rainText: { fontSize: fontSizes.fsXs, color: colors.gray600, fontFamily: fontFamilies.interRegular, marginTop: 4, lineHeight: 16 },
+
+  slotGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: spacing.space3, marginBottom: spacing.space5 },
+  slotCard: {
+    width: '48.5%', padding: spacing.space4, backgroundColor: colors.surfaceWhite,
+    borderRadius: radii.radiusXl, borderWidth: 1, borderColor: colors.gray200, ...shadows.shadowSm,
+  },
+  slotCardSelected: { borderColor: colors.primary400, borderWidth: 2, backgroundColor: '#faf5ff' },
+  slotRecommended: { position: 'absolute', top: -1, right: -1, paddingVertical: 3, paddingHorizontal: 9, backgroundColor: colors.primary600, borderTopRightRadius: radii.radiusXl, borderBottomLeftRadius: radii.radiusLg },
+  slotRecommendedText: { fontSize: 9, fontFamily: fontFamilies.interBold, fontWeight: fontWeights.fwBold, color: colors.white },
+  slotTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.space3 },
+  slotIconTile: { width: 40, height: 40, borderRadius: radii.radiusLg, backgroundColor: colors.gray100, alignItems: 'center', justifyContent: 'center' },
+  slotIconTileSelected: { backgroundColor: colors.primary50 },
+  slotRadio: { width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: colors.gray300, alignItems: 'center', justifyContent: 'center' },
+  slotRadioSelected: { borderColor: colors.primary600 },
+  slotRadioDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.primary600 },
+  slotTitle: { fontSize: fontSizes.fsBase, fontWeight: fontWeights.fwBold, fontFamily: fontFamilies.interBold, color: colors.gray900 },
+  slotNote: { fontSize: fontSizes.fsXs, fontFamily: fontFamilies.interRegular, color: colors.gray500 },
+  slotSub: { fontSize: fontSizes.fsXs, color: colors.gray500, fontFamily: fontFamilies.interRegular, marginTop: 2 },
+
+  dtRow: { flexDirection: 'row', gap: spacing.space3, marginBottom: spacing.space4 },
+  dtCard: { flex: 1, padding: spacing.space4, backgroundColor: colors.surfaceWhite, borderRadius: radii.radiusXl, borderWidth: 1, borderColor: colors.gray100, ...shadows.shadowSm },
+  dtIcon: { width: 36, height: 36, borderRadius: radii.radiusLg, backgroundColor: colors.primary50, alignItems: 'center', justifyContent: 'center', marginBottom: spacing.space2 },
+  dtLabel: { fontSize: fontSizes.fsXs, color: colors.gray500, fontFamily: fontFamilies.interMedium },
+  dtValue: { fontSize: fontSizes.fsBase, fontWeight: fontWeights.fwBold, fontFamily: fontFamilies.interBold, color: colors.gray900, marginTop: 2 },
+  dtSub: { fontSize: fontSizes.fsXs, color: colors.gray500, fontFamily: fontFamilies.interRegular, marginTop: 1 },
+
+  locCard: {
+    flexDirection: 'row', gap: spacing.space3, padding: spacing.space4,
+    backgroundColor: colors.surfaceWhite, borderRadius: radii.radiusXl, borderWidth: 1, borderColor: colors.gray100, ...shadows.shadowSm,
+  },
+  locIcon: { width: 40, height: 40, borderRadius: radii.radiusLg, backgroundColor: colors.primary50, alignItems: 'center', justifyContent: 'center' },
+  locLabel: { fontSize: fontSizes.fsXs, color: colors.gray500, fontFamily: fontFamilies.interMedium, marginBottom: spacing.space1 },
+  locInput: { gap: 0 },
 
   weatherCard: {
     flexDirection: 'row', gap: spacing.space3, marginTop: spacing.space4,
