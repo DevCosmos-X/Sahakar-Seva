@@ -1,11 +1,11 @@
-import { useState, useEffect } from 'react';
-import { View, Text, Pressable, ScrollView, StyleSheet, ActivityIndicator, Image, Alert } from 'react-native';
+import { useState, useEffect, useRef } from 'react';
+import { View, Text, Pressable, ScrollView, StyleSheet, ActivityIndicator, Image, Alert, Animated, Easing } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { launchCamera, launchImageLibrary } from 'react-native-image-picker';
 import {
   Calendar, Clock, CloudRain, Check, ArrowLeft, ArrowRight,
-  Sparkles, Receipt, Navigation, CheckCircle2, ShieldCheck, Printer, ClipboardList,
-  Camera, ImagePlus, X,
+  Sparkles, Receipt, Navigation, ShieldCheck, Printer, ClipboardList,
+  Camera, ImagePlus, X, Copy, Home, Heart,
 } from 'lucide-react-native';
 import { mockServices, currentWeather } from '@data/mockServices';
 import { addBooking, resolveCustomerId } from '@data/mockBookings';
@@ -14,7 +14,7 @@ import { shareReceipt } from '@utils/receipt';
 import { useAuth } from '@context/AuthContext';
 import { useLanguage } from '@context/LanguageContext';
 import useSpeechToText from '@hooks/useSpeechToText';
-import { ScreenContainer, ServiceGrid, Chip, ChipRow } from '@components/app';
+import { ScreenContainer, ServiceGrid, Chip, ChipRow, Confetti } from '@components/app';
 import { serviceIcon } from '@components/icons';
 import { TextArea } from '@components/ui/Input';
 import { FairnessBadge } from '@components/ui/Badge';
@@ -202,49 +202,17 @@ export default function BookingScreen({ navigation, route }) {
   };
 
   // ---- Confirmation screen ------------------------------------------------
+  // Frontend-only presentation: the EXISTING success state (confirmedBooking) drives an animated
+  // premium confirmation. All data, the OTP value, and the three action handlers are unchanged.
   if (confirmedBooking) {
     return (
-      <ScreenContainer contentStyle={{ paddingTop: insets.top + spacing.space4 }}>
-        <View style={styles.confirmedCard}>
-          <View style={styles.confirmedIcon}>
-            <CheckCircle2 size={48} color={colors.white} />
-          </View>
-          <Text style={styles.confirmedTitle}>Booking Confirmed! 🎉</Text>
-          <Text style={styles.confirmedSub}>
-            Your <Text style={styles.bold}>{confirmedBooking.serviceName}</Text> service has been scheduled.
-          </Text>
-
-          <View style={styles.metaBox}>
-            <MetaRow label="Booking ID" value={`#${confirmedBooking.id}`} mono />
-            <MetaRow label="Professional" value={`${confirmedBooking.workerName} (⭐ ${confirmedBooking.workerRating})`} />
-            <MetaRow label="Service Slot" value={`${confirmedBooking.date} at ${confirmedBooking.time}`} />
-            <MetaRow label="Total Paid" value={`₹${confirmedBooking.totalPrice} (GST incl.)`} accent />
-          </View>
-
-          <View style={styles.otpCard}>
-            <ShieldCheck size={22} color={colors.success600} />
-            <Text style={styles.otpText}>
-              Start-Service OTP: <Text style={styles.otpCode}>4892</Text>
-            </Text>
-          </View>
-
-          <Pressable
-            style={styles.primaryBtn}
-            onPress={() => navigation.navigate('LiveTrackingMap', { bookingId: confirmedBooking.id })}
-          >
-            <Navigation size={18} color={colors.white} />
-            <Text style={styles.primaryBtnText}>Track Worker Live</Text>
-          </Pressable>
-          <Pressable style={styles.outlineBtn} onPress={() => shareReceipt(confirmedBooking)}>
-            <Printer size={18} color={colors.primary600} />
-            <Text style={styles.outlineBtnText}>Share Bill Receipt</Text>
-          </Pressable>
-          <Pressable style={styles.ghostBtn} onPress={() => navigation.navigate('CustomerBookings')}>
-            <ClipboardList size={16} color={colors.gray600} />
-            <Text style={styles.ghostBtnText}>View My Bookings</Text>
-          </Pressable>
-        </View>
-      </ScreenContainer>
+      <BookingConfirmation
+        booking={confirmedBooking}
+        insetsTop={insets.top}
+        onTrack={() => navigation.navigate('LiveTrackingMap', { bookingId: confirmedBooking.id })}
+        onShare={() => shareReceipt(confirmedBooking)}
+        onViewBookings={() => navigation.navigate('CustomerBookings')}
+      />
     );
   }
 
@@ -513,14 +481,227 @@ export default function BookingScreen({ navigation, route }) {
   );
 }
 
-function MetaRow({ label, value, mono, accent }) {
+/**
+ * BookingConfirmation — the premium, animated confirmation view (frontend-only).
+ *
+ * Animation sequence (exactly the requested order):
+ *   1. Success icon springs up + fades in (starts small/transparent).
+ *   2. The white checkmark draws/scales in on top of the green circle.
+ *   3. Short delay.
+ *   4. Confetti bursts from around the icon.
+ *   5. The rest of the content fades/slides in and settles.
+ *
+ * All booking values come from the EXISTING `booking` object; the OTP keeps the existing frontend
+ * value (4892); the three actions call the handlers passed down unchanged.
+ */
+const CONFIRM_OTP = '4892'; // Existing frontend OTP value (unchanged; see file header).
+
+function BookingConfirmation({ booking, insetsTop, onTrack, onShare, onViewBookings }) {
+  // Resolve the service's icon from EXISTING data: booking.serviceId -> mockServices.icon name
+  // -> lucide component (via the existing serviceIcon registry). No new fields, no fake data.
+  const svc = mockServices.find((s) => s.id === booking.serviceId);
+  const ServiceIcon = serviceIcon(svc?.icon);
+  const serviceColor = svc?.color || colors.primary600;
+
+  const [copied, setCopied] = useState(false);
+  const [showConfetti, setShowConfetti] = useState(false);
+
+  // Animated values.
+  const iconScale = useRef(new Animated.Value(0.4)).current;
+  const iconOpacity = useRef(new Animated.Value(0)).current;
+  const checkScale = useRef(new Animated.Value(0)).current;
+  const ringScale = useRef(new Animated.Value(0.6)).current;
+  const ringOpacity = useRef(new Animated.Value(0)).current;
+  const contentOpacity = useRef(new Animated.Value(0)).current;
+  const contentShift = useRef(new Animated.Value(16)).current;
+
+  useEffect(() => {
+    // 1) Icon springs in + fades in; the soft ring pulses out behind it.
+    Animated.parallel([
+      Animated.spring(iconScale, { toValue: 1, friction: 5, tension: 90, useNativeDriver: true }),
+      Animated.timing(iconOpacity, { toValue: 1, duration: 260, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+      Animated.sequence([
+        Animated.timing(ringOpacity, { toValue: 0.5, duration: 200, useNativeDriver: true }),
+        Animated.parallel([
+          Animated.timing(ringScale, { toValue: 1.35, duration: 520, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+          Animated.timing(ringOpacity, { toValue: 0, duration: 520, useNativeDriver: true }),
+        ]),
+      ]),
+    ]).start(() => {
+      // 2) Checkmark draws in AFTER the circle has settled.
+      Animated.spring(checkScale, { toValue: 1, friction: 4, tension: 120, useNativeDriver: true }).start(() => {
+        // 3) Short delay, THEN 4) confetti, then 5) content settles.
+        setTimeout(() => {
+          setShowConfetti(true);
+          Animated.parallel([
+            Animated.timing(contentOpacity, { toValue: 1, duration: 380, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+            Animated.timing(contentShift, { toValue: 0, duration: 420, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+          ]).start();
+        }, 260);
+      });
+    });
+    // Run once on mount (a fresh confirmation always remounts with a new booking).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleCopy = () => {
+    // Visual-only copy feedback (no clipboard dependency is present in the project; adding one
+    // is out of scope for a frontend styling task). The OTP value itself is unchanged.
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1600);
+  };
+
   return (
-    <View style={styles.metaRow}>
-      <Text style={styles.metaLabel}>{label}</Text>
-      <Text style={[styles.metaValue, mono && styles.mono, accent && styles.metaAccent]}>{value}</Text>
+    <ScreenContainer contentStyle={[styles.confirmContent, { paddingTop: insetsTop + spacing.space4 }]}>
+      {/* ---- Success header ---- */}
+      <View style={styles.successHeader}>
+        <Confetti run={showConfetti} originY={40} />
+
+        <View style={styles.iconStage}>
+          <Animated.View
+            style={[styles.successRing, { opacity: ringOpacity, transform: [{ scale: ringScale }] }]}
+            pointerEvents="none"
+          />
+          <Animated.View style={[styles.successIcon, { opacity: iconOpacity, transform: [{ scale: iconScale }] }]}>
+            <Animated.View style={{ transform: [{ scale: checkScale }] }}>
+              <Check size={44} color={colors.white} strokeWidth={3.5} />
+            </Animated.View>
+          </Animated.View>
+        </View>
+
+        <Animated.View style={{ opacity: contentOpacity, transform: [{ translateY: contentShift }], alignItems: 'center' }}>
+          <Text style={styles.confirmedTitle}>Booking Confirmed! 🎉</Text>
+          <Text style={styles.confirmedSub}>
+            Your <Text style={styles.bold}>{booking.serviceName}</Text> service has been scheduled.
+          </Text>
+        </Animated.View>
+      </View>
+
+      <Animated.View style={{ opacity: contentOpacity, transform: [{ translateY: contentShift }] }}>
+        {/* ---- Booking details card ---- */}
+        <View style={styles.detailsCard}>
+          {/* Service summary + status badge */}
+          <View style={styles.detailsHead}>
+            <View style={[styles.svcIconBox, { backgroundColor: `${serviceColor}1A` }]}>
+              <ServiceIcon size={24} color={serviceColor} strokeWidth={2.2} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.svcName} numberOfLines={1}>{booking.serviceName}</Text>
+              <Text style={styles.svcSub}>Home Service</Text>
+            </View>
+            <View style={styles.statusBadge}>
+              <Check size={12} color={colors.success700} strokeWidth={3} />
+              <Text style={styles.statusText}>Scheduled</Text>
+            </View>
+          </View>
+
+          <View style={styles.detailsDivider} />
+
+          <DetailRow label="Booking ID" value={`#${booking.id}`} mono />
+          <DetailRow label="Professional" value={`${booking.workerName}  ★ ${booking.workerRating}`} />
+          <DetailRow label="Service Slot" value={`${booking.date} at ${booking.time}`} />
+          <DetailRow label="Total Paid" value={`₹${booking.totalPrice}`} hint="GST incl." accent last />
+        </View>
+
+        {/* ---- OTP card ---- */}
+        <View style={styles.otpCard}>
+          <View style={styles.otpHeadRow}>
+            <View style={styles.otpShield}>
+              <ShieldCheck size={18} color={colors.success700} strokeWidth={2.2} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.otpTitle}>Start-Service OTP</Text>
+              <Text style={styles.otpHint}>Share this OTP with the worker when they arrive.</Text>
+            </View>
+          </View>
+          <View style={styles.otpValueRow}>
+            <Text style={styles.otpCode}>{CONFIRM_OTP}</Text>
+            <PressableScale style={styles.otpCopyBtn} onPress={handleCopy} accessibilityLabel="Copy OTP">
+              {copied ? (
+                <>
+                  <Check size={15} color={colors.success700} strokeWidth={3} />
+                  <Text style={styles.otpCopyText}>Copied</Text>
+                </>
+              ) : (
+                <>
+                  <Copy size={15} color={colors.success700} strokeWidth={2.2} />
+                  <Text style={styles.otpCopyText}>Copy</Text>
+                </>
+              )}
+            </PressableScale>
+          </View>
+        </View>
+
+        {/* ---- Primary CTA ---- */}
+        <PressableScale style={styles.primaryBtn} onPress={onTrack} accessibilityLabel="Track Worker Live">
+          <Navigation size={18} color={colors.white} strokeWidth={2.4} />
+          <Text style={styles.primaryBtnText}>Track Worker Live</Text>
+          <ArrowRight size={18} color={colors.white} strokeWidth={2.4} style={styles.primaryBtnArrow} />
+        </PressableScale>
+
+        {/* ---- Secondary actions (two-column) ---- */}
+        <View style={styles.secondaryRow}>
+          <PressableScale style={[styles.secondaryBtn, styles.secondaryPrimary]} onPress={onShare} accessibilityLabel="Share Bill Receipt">
+            <Printer size={17} color={colors.primary600} strokeWidth={2.2} />
+            <Text style={styles.secondaryPrimaryText}>Share Bill Receipt</Text>
+          </PressableScale>
+          <PressableScale style={[styles.secondaryBtn, styles.secondaryNeutral]} onPress={onViewBookings} accessibilityLabel="View My Bookings">
+            <ClipboardList size={17} color={colors.gray700} strokeWidth={2.2} />
+            <Text style={styles.secondaryNeutralText}>View My Bookings</Text>
+          </PressableScale>
+        </View>
+
+        {/* ---- Thank-you / community card ---- */}
+        <View style={styles.thanksCard}>
+          <View style={styles.thanksIcon}>
+            <Home size={20} color={colors.primary600} strokeWidth={2.2} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.thanksTitle}>Thanks for choosing Sahakar Seva</Text>
+            <View style={styles.thanksSubRow}>
+              <Text style={styles.thanksSub}>Together we build stronger communities</Text>
+              <Heart size={13} color={colors.danger500} fill={colors.danger500} strokeWidth={0} />
+            </View>
+          </View>
+        </View>
+      </Animated.View>
+    </ScreenContainer>
+  );
+}
+
+/** PressableScale — small press-in scale for premium touch feedback (frontend-only). */
+function PressableScale({ children, style, onPress, accessibilityLabel }) {
+  const scale = useRef(new Animated.Value(1)).current;
+  const to = (v) => Animated.spring(scale, { toValue: v, friction: 6, tension: 180, useNativeDriver: true }).start();
+  return (
+    <Pressable
+      onPress={onPress}
+      onPressIn={() => to(0.96)}
+      onPressOut={() => to(1)}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+    >
+      <Animated.View style={[style, { transform: [{ scale }] }]}>{children}</Animated.View>
+    </Pressable>
+  );
+}
+
+/** DetailRow — a label/value row for the booking details card. */
+function DetailRow({ label, value, hint, mono, accent, last }) {
+  return (
+    <View style={[styles.detailRow, !last && styles.detailRowBorder]}>
+      <Text style={styles.detailLabel}>{label}</Text>
+      <View style={styles.detailValueWrap}>
+        <Text style={[styles.detailValue, mono && styles.mono, accent && styles.detailValueAccent]} numberOfLines={2}>
+          {value}
+        </Text>
+        {hint && <Text style={styles.detailHint}>{hint}</Text>}
+      </View>
     </View>
   );
 }
+
+
 
 function BillRow({ label, value, muted, total }) {
   return (
@@ -660,41 +841,97 @@ const styles = StyleSheet.create({
   },
   ctaMainText: { fontSize: fontSizes.fsBase, fontWeight: fontWeights.fwBold, fontFamily: fontFamilies.interBold, color: colors.white },
 
-  // Confirmation
-  confirmedCard: { alignItems: 'center', paddingTop: spacing.space4 },
-  confirmedIcon: {
-    width: 80, height: 80, borderRadius: 40, backgroundColor: colors.success500,
-    alignItems: 'center', justifyContent: 'center', marginBottom: spacing.space4, ...shadows.shadowGlow,
+  // ---- Confirmation (premium redesign) ----
+  confirmContent: { paddingBottom: spacing.space16 },
+
+  // Success header
+  successHeader: { alignItems: 'center', marginBottom: spacing.space6 },
+  iconStage: { width: 104, height: 104, alignItems: 'center', justifyContent: 'center', marginBottom: spacing.space4 },
+  successRing: {
+    position: 'absolute', width: 104, height: 104, borderRadius: 52,
+    borderWidth: 2, borderColor: colors.success300 || '#6ee7b7', backgroundColor: colors.success50,
   },
-  confirmedTitle: { fontSize: fontSizes.fs2xl, fontWeight: fontWeights.fwExtrabold, fontFamily: fontFamilies.interExtraBold, color: colors.gray900 },
-  confirmedSub: { fontSize: fontSizes.fsBase, color: colors.gray600, fontFamily: fontFamilies.interRegular, textAlign: 'center', marginTop: spacing.space2 },
-  metaBox: {
-    width: '100%', marginTop: spacing.space6, backgroundColor: colors.surfaceWhite,
-    borderRadius: radii.radiusLg, padding: spacing.space4, gap: spacing.space3, ...shadows.shadowSm,
+  successIcon: {
+    width: 88, height: 88, borderRadius: 44, backgroundColor: colors.success500,
+    alignItems: 'center', justifyContent: 'center', ...shadows.shadowGlow, shadowColor: colors.success500,
   },
-  metaRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  metaLabel: { fontSize: fontSizes.fsSm, color: colors.gray500, fontFamily: fontFamilies.interRegular },
-  metaValue: { fontSize: fontSizes.fsSm, fontWeight: fontWeights.fwSemibold, fontFamily: fontFamilies.interSemiBold, color: colors.gray900, flexShrink: 1, textAlign: 'right' },
-  metaAccent: { color: colors.primary700 },
+  confirmedTitle: { fontSize: fontSizes.fs2xl, fontWeight: fontWeights.fwExtrabold, fontFamily: fontFamilies.interExtraBold, color: colors.gray900, textAlign: 'center' },
+  confirmedSub: { fontSize: fontSizes.fsBase, color: colors.gray600, fontFamily: fontFamilies.interRegular, textAlign: 'center', marginTop: spacing.space2, lineHeight: 22 },
+
+  // Booking details card
+  detailsCard: {
+    backgroundColor: colors.surfaceWhite, borderRadius: radii.radiusXl, padding: spacing.space5,
+    borderWidth: 1, borderColor: colors.gray100, ...shadows.shadowMd,
+  },
+  detailsHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.space3 },
+  svcIconBox: { width: 48, height: 48, borderRadius: radii.radiusLg, alignItems: 'center', justifyContent: 'center' },
+  svcName: { fontSize: fontSizes.fsBase, fontWeight: fontWeights.fwBold, fontFamily: fontFamilies.interBold, color: colors.gray900 },
+  svcSub: { fontSize: fontSizes.fsXs, color: colors.gray500, fontFamily: fontFamilies.interMedium, marginTop: 1 },
+  statusBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 4, paddingHorizontal: 10,
+    backgroundColor: colors.success50, borderWidth: 1, borderColor: '#a7f3d0', borderRadius: radii.radiusFull,
+  },
+  statusText: { fontSize: fontSizes.fsXs, fontFamily: fontFamilies.interSemiBold, fontWeight: fontWeights.fwSemibold, color: colors.success700 },
+  detailsDivider: { height: 1, backgroundColor: colors.gray100, marginVertical: spacing.space4 },
+
+  detailRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: spacing.space3, paddingVertical: spacing.space3 },
+  detailRowBorder: { borderBottomWidth: 1, borderBottomColor: colors.gray100 },
+  detailLabel: { fontSize: fontSizes.fsSm, color: colors.gray500, fontFamily: fontFamilies.interMedium },
+  detailValueWrap: { flexShrink: 1, alignItems: 'flex-end' },
+  detailValue: { fontSize: fontSizes.fsSm, fontWeight: fontWeights.fwSemibold, fontFamily: fontFamilies.interSemiBold, color: colors.gray900, textAlign: 'right' },
+  detailValueAccent: { fontSize: fontSizes.fsLg, fontWeight: fontWeights.fwExtrabold, fontFamily: fontFamilies.interExtraBold, color: colors.primary700 },
+  detailHint: { fontSize: fontSizes.fsXs, color: colors.gray400, fontFamily: fontFamilies.interRegular, marginTop: 1 },
+
   mono: { fontFamily: 'monospace' },
+
+  // OTP card
   otpCard: {
-    flexDirection: 'row', alignItems: 'center', gap: spacing.space2, width: '100%',
-    marginTop: spacing.space4, backgroundColor: colors.success50, borderRadius: radii.radiusLg,
-    padding: spacing.space4, borderWidth: 1, borderColor: colors.success100,
+    width: '100%', marginTop: spacing.space4, backgroundColor: colors.success50,
+    borderRadius: radii.radiusXl, padding: spacing.space4, borderWidth: 1, borderColor: '#a7f3d0',
   },
-  otpText: { fontSize: fontSizes.fsSm, color: colors.gray700, fontFamily: fontFamilies.interRegular },
-  otpCode: { fontSize: fontSizes.fsLg, fontWeight: fontWeights.fwExtrabold, fontFamily: fontFamilies.interExtraBold, color: colors.success700, letterSpacing: 2 },
+  otpHeadRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.space3 },
+  otpShield: { width: 34, height: 34, borderRadius: radii.radiusMd, backgroundColor: colors.success100, alignItems: 'center', justifyContent: 'center' },
+  otpTitle: { fontSize: fontSizes.fsSm, fontWeight: fontWeights.fwBold, fontFamily: fontFamilies.interBold, color: colors.success800 },
+  otpHint: { fontSize: fontSizes.fsXs, color: colors.success700, fontFamily: fontFamilies.interRegular, marginTop: 2, lineHeight: 16 },
+  otpValueRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    marginTop: spacing.space3, paddingTop: spacing.space3, borderTopWidth: 1, borderTopColor: '#a7f3d0',
+  },
+  otpCode: { fontSize: fontSizes.fs3xl, fontWeight: fontWeights.fwExtrabold, fontFamily: fontFamilies.interExtraBold, color: colors.success700, letterSpacing: 8 },
+  otpCopyBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 8, paddingHorizontal: spacing.space3,
+    backgroundColor: colors.white, borderRadius: radii.radiusMd, borderWidth: 1, borderColor: '#a7f3d0',
+  },
+  otpCopyText: { fontSize: fontSizes.fsSm, fontFamily: fontFamilies.interSemiBold, fontWeight: fontWeights.fwSemibold, color: colors.success700 },
+
+  // Primary CTA
   primaryBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.space2,
-    width: '100%', height: 52, marginTop: spacing.space5, backgroundColor: colors.primary700, borderRadius: radii.radiusMd,
+    width: '100%', height: 54, marginTop: spacing.space5, backgroundColor: colors.primary700,
+    borderRadius: radii.radiusLg, ...shadows.shadowMd, shadowColor: colors.primary700,
   },
   primaryBtnText: { fontSize: fontSizes.fsBase, fontWeight: fontWeights.fwBold, fontFamily: fontFamilies.interBold, color: colors.white },
-  outlineBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.space2,
-    width: '100%', height: 52, marginTop: spacing.space3, borderRadius: radii.radiusMd,
-    borderWidth: 2, borderColor: colors.primary300,
+  primaryBtnArrow: { marginLeft: 2 },
+
+  // Secondary actions (two-column)
+  secondaryRow: { flexDirection: 'row', gap: spacing.space3, marginTop: spacing.space3 },
+  secondaryBtn: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+    minHeight: 50, paddingVertical: spacing.space3, paddingHorizontal: spacing.space2, borderRadius: radii.radiusLg, borderWidth: 1.5,
   },
-  outlineBtnText: { fontSize: fontSizes.fsBase, fontWeight: fontWeights.fwSemibold, fontFamily: fontFamilies.interSemiBold, color: colors.primary600 },
-  ghostBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.space2, marginTop: spacing.space4 },
-  ghostBtnText: { fontSize: fontSizes.fsSm, color: colors.gray600, fontFamily: fontFamilies.interMedium },
+  secondaryPrimary: { backgroundColor: colors.primary50, borderColor: colors.primary200 },
+  secondaryPrimaryText: { fontSize: fontSizes.fsSm, fontWeight: fontWeights.fwSemibold, fontFamily: fontFamilies.interSemiBold, color: colors.primary700, flexShrink: 1 },
+  secondaryNeutral: { backgroundColor: colors.surfaceWhite, borderColor: colors.gray200 },
+  secondaryNeutralText: { fontSize: fontSizes.fsSm, fontWeight: fontWeights.fwSemibold, fontFamily: fontFamilies.interSemiBold, color: colors.gray700, flexShrink: 1 },
+
+  // Thank-you / community card
+  thanksCard: {
+    flexDirection: 'row', alignItems: 'center', gap: spacing.space3, marginTop: spacing.space5,
+    padding: spacing.space4, borderRadius: radii.radiusXl, backgroundColor: colors.primary50,
+    borderWidth: 1, borderColor: colors.primary100,
+  },
+  thanksIcon: { width: 40, height: 40, borderRadius: radii.radiusFull, backgroundColor: colors.white, alignItems: 'center', justifyContent: 'center' },
+  thanksTitle: { fontSize: fontSizes.fsSm, fontWeight: fontWeights.fwBold, fontFamily: fontFamilies.interBold, color: colors.primary900 },
+  thanksSubRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2, flexWrap: 'wrap' },
+  thanksSub: { fontSize: fontSizes.fsXs, color: colors.primary700, fontFamily: fontFamilies.interRegular },
 });

@@ -12,4 +12,6 @@ export { default as ServiceGrid } from './ServiceGrid';
 export { default as ServiceCardGrid } from './ServiceCardGrid';
 export { default as GradientBand } from './GradientBand';
 export { default as ChatWidget } from './ChatWidget';
+export { default as BrandLogo } from './BrandLogo';
+export { default as Confetti } from './Confetti';
 export { Chip, ChipRow } from './Chip';

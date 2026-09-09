@@ -1,3 +1,4 @@
+import { View, StyleSheet } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Home, Briefcase, User, CalendarOff, BookOpen } from 'lucide-react-native';
 import { useLanguage } from '@context/LanguageContext';
@@ -6,16 +7,28 @@ import JobFeedScreen from '@screens/worker/JobFeedScreen';
 import WorkerProfileScreen from '@screens/worker/WorkerProfileScreen';
 import LeaveRequestsScreen from '@screens/worker/LeaveRequestsScreen';
 import WorkerTrainingPortalScreen from '@screens/worker/WorkerTrainingPortalScreen';
-import { colors, spacing, fontWeights, fontFamilies } from '@theme';
+import { colors, spacing, radii, fontWeights, fontFamilies } from '@theme';
 
 /**
  * WorkerTabs — bottom-tab navigator for the worker portal.
  * Ports WorkerLayout.jsx's navItems (Dashboard/Jobs/Profile/Leave/Training). Worker accent is
  * amber (web used an amber gradient avatar/brand). Screens own their in-content PortalHeader,
  * so the tab-navigator chrome header is hidden (headerShown:false).
+ *
+ * VISUAL (presentation-only): the active tab's icon sits inside a soft-orange rounded pill for a
+ * clearer, more premium active state. Routes, labels, and screen components are unchanged.
  */
 
 const Tab = createBottomTabNavigator();
+
+/** Renders a tab icon inside a soft-orange pill when the tab is focused (presentation only). */
+function TabIcon({ icon: Icon, color, focused }) {
+  return (
+    <View style={[styles.iconPill, focused && styles.iconPillActive]}>
+      <Icon color={color} size={22} strokeWidth={focused ? 2.6 : 2} />
+    </View>
+  );
+}
 
 export default function WorkerTabs() {
   const { t } = useLanguage();
@@ -55,28 +68,42 @@ export default function WorkerTabs() {
       <Tab.Screen
         name="WorkerDashboard"
         component={WorkerDashboardScreen}
-        options={{ title: t('dashboard'), tabBarIcon: ({ color, focused }) => <Home color={color} size={23} strokeWidth={focused ? 2.6 : 2} /> }}
+        options={{ title: t('dashboard'), tabBarIcon: (p) => <TabIcon icon={Home} {...p} /> }}
       />
       <Tab.Screen
         name="WorkerJobs"
         component={JobFeedScreen}
-        options={{ title: t('jobs'), tabBarIcon: ({ color, focused }) => <Briefcase color={color} size={23} strokeWidth={focused ? 2.6 : 2} /> }}
+        options={{ title: t('jobs'), tabBarIcon: (p) => <TabIcon icon={Briefcase} {...p} /> }}
       />
       <Tab.Screen
         name="WorkerProfile"
         component={WorkerProfileScreen}
-        options={{ title: t('profile'), tabBarIcon: ({ color, focused }) => <User color={color} size={23} strokeWidth={focused ? 2.6 : 2} /> }}
+        options={{ title: t('profile'), tabBarIcon: (p) => <TabIcon icon={User} {...p} /> }}
       />
       <Tab.Screen
         name="WorkerLeave"
         component={LeaveRequestsScreen}
-        options={{ title: t('leave'), tabBarIcon: ({ color, focused }) => <CalendarOff color={color} size={23} strokeWidth={focused ? 2.6 : 2} /> }}
+        options={{ title: t('leave'), tabBarIcon: (p) => <TabIcon icon={CalendarOff} {...p} /> }}
       />
       <Tab.Screen
         name="WorkerTraining"
         component={WorkerTrainingPortalScreen}
-        options={{ title: t('training'), tabBarIcon: ({ color, focused }) => <BookOpen color={color} size={23} strokeWidth={focused ? 2.6 : 2} /> }}
+        options={{ title: t('training'), tabBarIcon: (p) => <TabIcon icon={BookOpen} {...p} /> }}
       />
     </Tab.Navigator>
   );
 }
+
+const styles = StyleSheet.create({
+  iconPill: {
+    minWidth: 44,
+    height: 30,
+    borderRadius: radii.radiusFull,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.space3,
+  },
+  iconPillActive: {
+    backgroundColor: colors.accent50,
+  },
+});

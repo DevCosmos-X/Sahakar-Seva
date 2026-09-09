@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { launchImageLibrary } from 'react-native-image-picker';
 import { Eye, EyeOff, User, Wrench, Upload, CheckCircle } from 'lucide-react-native';
 import { useAuth } from '@context/AuthContext';
+import { BrandLogo } from '@components/app';
 import { colors, spacing, radii, shadows, fontSizes, fontWeights, fontFamilies } from '@theme';
 
 /**
@@ -131,8 +132,10 @@ export default function RegisterScreen({ navigation, route }) {
     >
       <View style={styles.card}>
         <View style={styles.brand}>
-          <View style={styles.logo}>
-            <Text style={styles.logoText}>सस</Text>
+          {/* EXACT existing app icon (native ic_launcher) with bundled @assets/logo.png fallback,
+              replacing the previous text placeholder so the real Sahakar Seva logo is shown. */}
+          <View style={styles.logoBox}>
+            <BrandLogo style={styles.logo} accessibilityLabel="Sahakar Seva logo" />
           </View>
           <View style={styles.brandTextWrap}>
             <Text style={styles.title}>सहकार सेवा</Text>
@@ -325,18 +328,21 @@ const styles = StyleSheet.create({
     gap: spacing.space3,
     marginBottom: spacing.space5,
   },
+  logoBox: {
+    width: 52,
+    height: 52,
+    borderRadius: 14,
+    backgroundColor: colors.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+    ...shadows.shadowMd,
+    shadowColor: colors.primary700,
+  },
   logo: {
     width: 52,
     height: 52,
     borderRadius: 14,
-    backgroundColor: colors.primary700,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  logoText: {
-    color: colors.white,
-    fontSize: fontSizes.fsLg,
-    fontFamily: fontFamilies.notoDevanagariBold,
   },
   brandTextWrap: {
     flex: 1,

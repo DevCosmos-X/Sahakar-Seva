@@ -1,3 +1,4 @@
+import { View, StyleSheet } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Home, CalendarPlus, ClipboardList, User } from 'lucide-react-native';
 import { useLanguage } from '@context/LanguageContext';
@@ -5,7 +6,7 @@ import CustomerDashboardScreen from '@screens/customer/CustomerDashboardScreen';
 import BookingScreen from '@screens/customer/BookingScreen';
 import BookingTrackerScreen from '@screens/customer/BookingTrackerScreen';
 import CustomerProfileScreen from '@screens/customer/CustomerProfileScreen';
-import { colors, spacing, fontSizes, fontWeights, fontFamilies } from '@theme';
+import { colors, spacing, radii, fontSizes, fontWeights, fontFamilies } from '@theme';
 
 /**
  * CustomerTabs — bottom-tab navigator for the customer portal.
@@ -21,6 +22,15 @@ import { colors, spacing, fontSizes, fontWeights, fontFamilies } from '@theme';
  */
 
 const Tab = createBottomTabNavigator();
+
+/** Renders a tab icon inside a soft-purple pill when focused (presentation only). */
+function TabIcon({ icon: Icon, color, focused }) {
+  return (
+    <View style={[styles.iconPill, focused && styles.iconPillActive]}>
+      <Icon color={color} size={22} strokeWidth={focused ? 2.6 : 2} />
+    </View>
+  );
+}
 
 export default function CustomerTabs() {
   const { t } = useLanguage();
@@ -61,7 +71,7 @@ export default function CustomerTabs() {
         component={CustomerDashboardScreen}
         options={{
           title: t('dashboard'),
-          tabBarIcon: ({ color, focused }) => <Home color={color} size={23} strokeWidth={focused ? 2.6 : 2} />,
+          tabBarIcon: (p) => <TabIcon icon={Home} {...p} />,
         }}
       />
       <Tab.Screen
@@ -69,7 +79,7 @@ export default function CustomerTabs() {
         component={BookingScreen}
         options={{
           title: t('book_service'),
-          tabBarIcon: ({ color, focused }) => <CalendarPlus color={color} size={23} strokeWidth={focused ? 2.6 : 2} />,
+          tabBarIcon: (p) => <TabIcon icon={CalendarPlus} {...p} />,
         }}
       />
       <Tab.Screen
@@ -77,7 +87,7 @@ export default function CustomerTabs() {
         component={BookingTrackerScreen}
         options={{
           title: t('my_bookings'),
-          tabBarIcon: ({ color, focused }) => <ClipboardList color={color} size={23} strokeWidth={focused ? 2.6 : 2} />,
+          tabBarIcon: (p) => <TabIcon icon={ClipboardList} {...p} />,
         }}
       />
       <Tab.Screen
@@ -85,9 +95,23 @@ export default function CustomerTabs() {
         component={CustomerProfileScreen}
         options={{
           title: t('profile'),
-          tabBarIcon: ({ color, focused }) => <User color={color} size={23} strokeWidth={focused ? 2.6 : 2} />,
+          tabBarIcon: (p) => <TabIcon icon={User} {...p} />,
         }}
       />
     </Tab.Navigator>
   );
 }
+
+const styles = StyleSheet.create({
+  iconPill: {
+    minWidth: 44,
+    height: 30,
+    borderRadius: radii.radiusFull,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.space3,
+  },
+  iconPillActive: {
+    backgroundColor: colors.primary50,
+  },
+});
