@@ -13,6 +13,7 @@ import {
 } from 'lucide-react-native';
 import { useAuth } from '@context/AuthContext';
 import { ScreenContainer } from '@components/app';
+import AvatarPortrait from '@components/illustrations/AvatarPortrait';
 import { DEMO_WORKER_ID, demoMockWorker } from './workerData';
 import { colors, spacing, radii, shadows, fontSizes, fontWeights, fontFamilies } from '@theme';
 
@@ -64,7 +65,6 @@ export default function WorkerProfileScreen() {
   const isVerified = isDemo ? !!demoMockWorker.verified : !!workerProfile?.verified;
   // Use an existing avatar URL if the profile ever provides one; otherwise the initial avatar.
   const avatarUrl = isDemo ? demoMockWorker.avatar : workerProfile?.avatar_url || user?.avatar || null;
-  const avatarInitial = (displayName[0] || '?').toUpperCase();
   // Profession subtitle is just the existing skills, joined — not a fabricated job title.
   const professionLine = skills.length > 0 ? skills.join(' · ') : null;
 
@@ -96,8 +96,8 @@ export default function WorkerProfileScreen() {
             {avatarUrl ? (
               <Image source={{ uri: avatarUrl }} style={styles.avatarImg} />
             ) : (
-              <View style={styles.avatar}>
-                <Text style={styles.avatarText}>{avatarInitial}</Text>
+              <View style={styles.avatarImg}>
+                <AvatarPortrait size={88} seed={user?.id || displayName} />
               </View>
             )}
           </View>
