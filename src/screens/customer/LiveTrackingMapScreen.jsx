@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { View, Text, Pressable, StyleSheet, Linking, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import MapView, { Marker, Polyline } from 'react-native-maps';
+import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
 import {
   Phone, MessageCircle, Share2, ShieldCheck, Navigation, CheckCircle2, ArrowLeft,
   Route as RouteIcon, Bike, Home as HomeIcon, Pause, Play, RotateCcw, MapPin, Star,
@@ -19,15 +19,23 @@ import { colors, spacing, radii, shadows, fontSizes, fontWeights, fontFamilies }
  * real via haversine every tick. Preserved verbatim: booking/worker resolution, the route, the
  * simulation loop, camera modes, OTP, call/message/share handlers, replay/pause.
  *
- * MAP-RENDER FIX (frontend, task-scoped): the Google tiles were blank because the project's
- * GOOGLE_MAPS_API_KEY is still the ".env" placeholder (YOUR_GOOGLE_MAPS_API_KEY) — with
- * provider=google + an invalid key, the Google SDK draws no tiles (markers/polylines still draw,
- * hence the beige void). A valid key + Maps SDK/billing is a Cloud-Console/config step, out of
- * this frontend task's scope. The frontend lever applied here: DROP the explicit Google provider
- * so react-native-maps uses the platform DEFAULT map provider, which renders on Play-Services
- * devices without an app-level key. A subtle customMapStyle + a themed backdrop under the map
- * ensure the tracking canvas reads as an intentional map surface even if a given device can't
- * fetch tiles — never a blank beige block. No location/route/tracking data or logic changed.
+ * MAP-RENDER DIAGNOSIS (frontend, task-scoped):
+ *   - The frontend map component (react-native-maps MapView + Google provider) is correct and is
+ *     the real, interactive map — NOT a placeholder. Markers/polylines/camera all work.
+ *   - The blank/beige tile surface is caused OUTSIDE the frontend: the Android Google Maps SDK
+ *     authenticates with android/app/src/main/AndroidManifest.xml's com.google.android.geo.API_KEY,
+ *     which resolves (via react-native-config's dotenv.gradle) from GOOGLE_MAPS_API_KEY in .env.
+ *     That value is still the placeholder "YOUR_GOOGLE_MAPS_API_KEY", so the SDK fails auth and
+ *     draws no tiles. Supplying a valid, unrestricted-enough key + enabling "Maps SDK for Android"
+ *     with billing in Google Cloud Console (then a native rebuild) makes real tiles appear. That is
+ *     a credentials/config step and is intentionally NOT done here (no inventing keys, no backend
+ *     changes). See MIGRATION_NOTES.md §6.2.
+ *
+ *   NOTE on a prior "fix": dropping the Google provider does NOT switch Android to a keyless
+ *   renderer — react-native-maps uses Google Maps on Android regardless — so it never helped the
+ *   tiles and only made the code misleading. We restore provider={PROVIDER_GOOGLE} (the correct,
+ *   original config) and remove the fake beige backdrop that masqueraded as a map. No
+ *   location/route/tracking data or logic changed.
  *
  * UI REDESIGN: premium floating header, redesigned live-distance pill, compact icon map controls,
  * and a polished floating bottom sheet. All values remain dynamic from the existing data.
@@ -192,12 +200,10 @@ export default function LiveTrackingMapScreen({ navigation, route }) {
 
   return (
     <View style={styles.root}>
-      {/* Themed backdrop so the tracking canvas never reads as a blank beige block. */}
-      <View style={styles.mapBackdrop} pointerEvents="none" />
-
-      {/* Map (default provider — see header note on the tiles/key). */}
+      {/* The real, interactive Google map fills the whole screen behind the overlays. */}
       <MapView
         ref={mapRef}
+        provider={PROVIDER_GOOGLE}
         style={StyleSheet.absoluteFill}
         initialRegion={initialRegion}
         customMapStyle={MAP_STYLE}
@@ -205,6 +211,9 @@ export default function LiveTrackingMapScreen({ navigation, route }) {
         onPanDrag={() => setCameraMode('manual')}
         showsMyLocationButton={false}
         toolbarEnabled={false}
+        loadingEnabled
+        loadingBackgroundColor="#eceaf6"
+        loadingIndicatorColor={colors.primary600}
       >
         <Polyline coordinates={fullRouteCoords} strokeColor={colors.primary200} strokeWidth={7} lineCap="round" lineJoin="round" />
         <Polyline coordinates={traveledCoords} strokeColor={colors.primary600} strokeWidth={7} lineCap="round" />
@@ -242,8 +251,9 @@ export default function LiveTrackingMapScreen({ navigation, route }) {
         <Text style={styles.livePillText}>{isArrived ? 'REACHED' : formatDistance(remainingDistanceMeters)}</Text>
       </View>
 
-      {/* Compact icon map controls */}
-      <View style={styles.cameraControls}>
+      {/* Compact icon map controls — anchored from the top (relative to the pill) so they always
+          stay in the visible viewport on the right and are never covered by the bottom sheet. */}
+      <View style={[styles.cameraControls, { top: insets.top + 130 }]}>
         <CamBtn icon={RouteIcon} active={cameraMode === 'overview'} onPress={fitOverview} label="Route" />
         <CamBtn icon={Bike} active={cameraMode === 'worker'} onPress={focusWorker} label="Worker" />
         <CamBtn icon={HomeIcon} active={cameraMode === 'home'} onPress={focusHome} label="Home" />
@@ -344,8 +354,9 @@ function CamBtn({ icon: Icon, active, onPress, label }) {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#f4f3f8' },
-  mapBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: '#eceaf6' },
+  // While tiles load the map shows this neutral color; it is the map's own loading background,
+  // not a fake surface layered over the map.
+  root: { flex: 1, backgroundColor: '#eceaf6' },
 
   // ---- Header ----
   topBar: {
@@ -387,12 +398,21 @@ const styles = StyleSheet.create({
   },
 
   // ---- Camera controls ----
-  cameraControls: { position: 'absolute', right: spacing.space3, bottom: 470, gap: spacing.space2 },
+  // A single refined pill-group on the right, dividers between buttons, consistent with the UI.
+  cameraControls: {
+    position: 'absolute', right: spacing.space3,
+    backgroundColor: 'rgba(255,255,255,0.98)',
+    borderRadius: radii.radiusFull,
+    paddingVertical: spacing.space1,
+    borderWidth: StyleSheet.hairlineWidth, borderColor: colors.gray200,
+    ...shadows.shadowLg,
+  },
   camBtn: {
     width: 46, height: 46, borderRadius: radii.radiusFull,
-    backgroundColor: 'rgba(255,255,255,0.98)', alignItems: 'center', justifyContent: 'center', ...shadows.shadowMd,
+    alignItems: 'center', justifyContent: 'center',
+    marginHorizontal: 4, marginVertical: 2,
   },
-  camBtnActive: { backgroundColor: colors.primary600 },
+  camBtnActive: { backgroundColor: colors.primary600, ...shadows.shadowSm },
 
   // ---- Bottom sheet ----
   sheet: {

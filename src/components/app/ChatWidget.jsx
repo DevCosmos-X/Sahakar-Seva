@@ -1,9 +1,12 @@
 import { useState, useRef, useEffect } from 'react';
 import {
   View, Text, Pressable, TextInput, ScrollView, Modal, StyleSheet,
-  KeyboardAvoidingView, Platform, ActivityIndicator,
+  KeyboardAvoidingView, Platform, ActivityIndicator, Animated, Easing,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Svg, {
+  Defs, LinearGradient as SvgLinearGradient, RadialGradient, Stop, Path, Rect, Circle, Ellipse,
+} from 'react-native-svg';
 import { X, Send, Bot, User, Mic } from 'lucide-react-native';
 import { chatWithSahakarAI } from '@services/aiService';
 import { useAuth } from '@context/AuthContext';
@@ -73,6 +76,65 @@ function formatTime(d) {
   }
 }
 
+/**
+ * RobotMascot — the premium Sahakar AI robot mascot, drawn with react-native-svg so it scales
+ * crisply at any size and ships no image assets. Presentation only: a white/light rounded body,
+ * a deep-indigo face screen with friendly smiling eyes, soft purple/indigo accents, and a small
+ * antenna with a purple tip. Used solely as the visual for the existing floating assistant button.
+ */
+function RobotMascot({ size = 34 }) {
+  // viewBox is 64×64; everything below is authored in that coordinate space.
+  return (
+    <Svg width={size} height={size} viewBox="0 0 64 64">
+      <Defs>
+        {/* Soft white body shading (light from top-left). */}
+        <RadialGradient id="rm-body" cx="0.38" cy="0.30" r="0.85">
+          <Stop offset="0" stopColor="#ffffff" />
+          <Stop offset="0.7" stopColor="#f3f2fb" />
+          <Stop offset="1" stopColor="#dcd9f2" />
+        </RadialGradient>
+        {/* Deep indigo/navy face screen. */}
+        <SvgLinearGradient id="rm-face" x1="0" y1="0" x2="0" y2="1">
+          <Stop offset="0" stopColor="#221a4e" />
+          <Stop offset="1" stopColor="#171142" />
+        </SvgLinearGradient>
+        {/* Purple accent (antenna tip, ears). */}
+        <SvgLinearGradient id="rm-accent" x1="0" y1="0" x2="1" y2="1">
+          <Stop offset="0" stopColor="#8b7cf6" />
+          <Stop offset="1" stopColor="#6d5cf0" />
+        </SvgLinearGradient>
+      </Defs>
+
+      {/* Antenna */}
+      <Path d="M32 12 C33 16 33 18 33 21" stroke="#4a3fb0" strokeWidth={2.4} strokeLinecap="round" fill="none" />
+      <Circle cx="31.5" cy="10.5" r="4.2" fill="url(#rm-accent)" />
+      <Circle cx="30.2" cy="9.2" r="1.3" fill="#c9c2fb" />
+
+      {/* Ears / side accents */}
+      <Rect x="8.5" y="30" width="7" height="16" rx="3.5" fill="url(#rm-accent)" />
+      <Rect x="48.5" y="30" width="7" height="16" rx="3.5" fill="url(#rm-accent)" />
+
+      {/* Head/body shell */}
+      <Rect x="12" y="20" width="40" height="34" rx="16" fill="url(#rm-body)" />
+      {/* Subtle rim light on the shell */}
+      <Rect x="12" y="20" width="40" height="34" rx="16" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth={1} />
+
+      {/* Face screen */}
+      <Rect x="18" y="26" width="28" height="21" rx="10" fill="url(#rm-face)" />
+      {/* Screen sheen */}
+      <Ellipse cx="27" cy="31" rx="9" ry="3.2" fill="rgba(255,255,255,0.10)" />
+
+      {/* Friendly smiling eyes (upward curves) */}
+      <Path d="M24 38 C25.6 34.8 28.4 34.8 30 38" stroke="#ffffff" strokeWidth={2.6} strokeLinecap="round" fill="none" />
+      <Path d="M34 38 C35.6 34.8 38.4 34.8 40 38" stroke="#ffffff" strokeWidth={2.6} strokeLinecap="round" fill="none" />
+
+      {/* Little rounded feet/base */}
+      <Ellipse cx="24" cy="55.5" rx="7.5" ry="4" fill="url(#rm-body)" />
+      <Ellipse cx="40" cy="55.5" rx="7.5" ry="4" fill="url(#rm-body)" />
+    </Svg>
+  );
+}
+
 export default function ChatWidget() {
   const { role } = useAuth();
   const { language, setLanguage } = useLanguage();
@@ -84,6 +146,36 @@ export default function ChatWidget() {
   const [loading, setLoading] = useState(false);
   const [unread, setUnread] = useState(0);
   const scrollRef = useRef(null);
+
+  // Subtle "attention" animations for the FAB (presentation only, native-driven where possible):
+  // a gentle vertical float and a soft pulsing glow. Neither affects behaviour.
+  const floatY = useRef(new Animated.Value(0)).current;
+  const glow = useRef(new Animated.Value(0)).current;
+  const pressScale = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    const float = Animated.loop(
+      Animated.sequence([
+        Animated.timing(floatY, { toValue: -5, duration: 1600, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+        Animated.timing(floatY, { toValue: 0, duration: 1600, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+      ])
+    );
+    const pulse = Animated.loop(
+      Animated.sequence([
+        Animated.timing(glow, { toValue: 1, duration: 1800, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+        Animated.timing(glow, { toValue: 0, duration: 1800, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+      ])
+    );
+    float.start();
+    pulse.start();
+    return () => {
+      float.stop();
+      pulse.stop();
+    };
+  }, [floatY, glow]);
+
+  const glowOpacity = glow.interpolate({ inputRange: [0, 1], outputRange: [0.25, 0.5] });
+  const glowScale = glow.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1.12] });
 
   const activeLang = LANGUAGES.find((l) => l.code === (language || 'en')) || LANGUAGES[0];
 
@@ -123,19 +215,34 @@ export default function ChatWidget() {
 
   return (
     <>
-      {/* Floating action button (always visible while authenticated) */}
-      <Pressable
-        style={({ pressed }) => [styles.fab, { bottom: insets.bottom + 76 }, pressed && styles.fabPressed]}
-        onPress={() => setOpen(true)}
-        accessibilityLabel="Open Sahakar AI assistant"
+      {/* Floating AI assistant — premium robot mascot (visual only; behaviour unchanged). */}
+      <Animated.View
+        style={[styles.fabWrap, { bottom: insets.bottom + 76 }, { transform: [{ translateY: floatY }] }]}
+        pointerEvents="box-none"
       >
-        <Bot size={22} color={colors.white} strokeWidth={2.2} />
-        {unread > 0 && (
-          <View style={styles.badge}>
-            <Text style={styles.badgeText}>{unread}</Text>
-          </View>
-        )}
-      </Pressable>
+        {/* Soft indigo glow behind the mascot */}
+        <Animated.View
+          style={[styles.fabGlow, { opacity: glowOpacity, transform: [{ scale: glowScale }] }]}
+          pointerEvents="none"
+        />
+        <Pressable
+          onPress={() => setOpen(true)}
+          onPressIn={() => Animated.spring(pressScale, { toValue: 0.92, useNativeDriver: true, friction: 7, tension: 200 }).start()}
+          onPressOut={() => Animated.spring(pressScale, { toValue: 1, useNativeDriver: true, friction: 7, tension: 200 }).start()}
+          accessibilityLabel="Open Sahakar AI assistant"
+          accessibilityRole="button"
+          hitSlop={8}
+        >
+          <Animated.View style={[styles.fab, { transform: [{ scale: pressScale }] }]}>
+            <RobotMascot size={40} />
+            {unread > 0 && (
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>{unread}</Text>
+              </View>
+            )}
+          </Animated.View>
+        </Pressable>
+      </Animated.View>
 
       <Modal visible={open} animationType="slide" transparent onRequestClose={() => setOpen(false)}>
         <View style={styles.backdrop}>
@@ -270,21 +377,38 @@ export default function ChatWidget() {
 }
 
 const styles = StyleSheet.create({
-  fab: {
+  // Wrapper positions the floating assistant at the right-bottom (bottom set inline from insets).
+  fabWrap: {
     position: 'absolute',
     right: spacing.space4,
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: colors.primary600,
+    width: 60,
+    height: 60,
     alignItems: 'center',
     justifyContent: 'center',
-    // Refined lift: softer, indigo-tinted shadow rather than the heavy black shadowXl.
-    ...shadows.shadowLg,
-    shadowColor: colors.primary700,
     zIndex: 1000,
   },
-  fabPressed: { transform: [{ scale: 0.94 }] },
+  // Soft indigo halo that gently pulses behind the mascot.
+  fabGlow: {
+    position: 'absolute',
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: colors.primary400,
+  },
+  fab: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    // Light premium surface so the white robot reads clearly, with a faint indigo tint + ring.
+    backgroundColor: '#f3f1fd',
+    borderWidth: 1,
+    borderColor: 'rgba(124,108,246,0.35)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    // Refined lift: soft, indigo-tinted shadow.
+    ...shadows.shadowLg,
+    shadowColor: colors.primary700,
+  },
   badge: {
     position: 'absolute',
     top: -2,

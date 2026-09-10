@@ -35,7 +35,17 @@ export const translations = {
     demand_forecast_ai: 'AI Demand Forecast',
     manage_workers: 'Manage Workers',
     view_complaints: 'View Complaints',
-    overview_desc: 'Overview of platform performance'
+    overview_desc: 'Overview of platform performance',
+    good_morning: 'Good morning',
+    good_afternoon: 'Good afternoon',
+    good_evening: 'Good evening',
+    hello: 'Hello',
+    heres_whats_happening: "Here's what's happening today",
+    hero_title: 'Better Services, Stronger Communities',
+    hero_sub: 'Track, manage, serve.',
+    info_title: 'Keep Your Community Clean',
+    info_sub: 'Track bookings, monitor progress and make a bigger impact together.',
+    see_all: 'See All'
   },
   hi: {
     dashboard: 'डैशबोर्ड',
@@ -73,7 +83,17 @@ export const translations = {
     demand_forecast_ai: 'एआई मांग पूर्वानुमान',
     manage_workers: 'कार्यकर्ता प्रबंधन',
     view_complaints: 'शिकायतें देखें',
-    overview_desc: 'प्लेटफ़ॉर्म प्रदर्शन का समग्र विवरण'
+    overview_desc: 'प्लेटफ़ॉर्म प्रदर्शन का समग्र विवरण',
+    good_morning: 'सुप्रभात',
+    good_afternoon: 'नमस्कार',
+    good_evening: 'शुभ संध्या',
+    hello: 'नमस्ते',
+    heres_whats_happening: 'आज की गतिविधियाँ यहाँ हैं',
+    hero_title: 'बेहतर सेवाएँ, मज़बूत समुदाय',
+    hero_sub: 'ट्रैक करें, प्रबंधित करें, सेवा दें।',
+    info_title: 'अपने समुदाय को स्वच्छ रखें',
+    info_sub: 'बुकिंग ट्रैक करें, प्रगति देखें और मिलकर बड़ा प्रभाव डालें।',
+    see_all: 'सभी देखें'
   },
   bn: {
     dashboard: 'ড্যাশবোর্ড',
@@ -111,6 +131,16 @@ export const translations = {
     demand_forecast_ai: 'এআই চাহিদা পূর্বাভাস',
     manage_workers: 'কর্মী পরিচালনা',
     view_complaints: 'অভিযোগ দেখুন',
-    overview_desc: 'প্ল্যাটফর্মের পারফরম্যান্সের ওভারভিউ'
+    overview_desc: 'প্ল্যাটফর্মের পারফরম্যান্সের ওভারভিউ',
+    good_morning: 'শুভ সকাল',
+    good_afternoon: 'শুভ অপরাহ্ন',
+    good_evening: 'শুভ সন্ধ্যা',
+    hello: 'নমস্কার',
+    heres_whats_happening: 'আজ যা ঘটছে তা এখানে',
+    hero_title: 'উন্নত পরিষেবা, শক্তিশালী সম্প্রদায়',
+    hero_sub: 'ট্র্যাক করুন, পরিচালনা করুন, পরিষেবা দিন।',
+    info_title: 'আপনার সম্প্রদায়কে পরিচ্ছন্ন রাখুন',
+    info_sub: 'বুকিং ট্র্যাক করুন, অগ্রগতি পর্যবেক্ষণ করুন এবং একসাথে বৃহত্তর প্রভাব ফেলুন।',
+    see_all: 'সব দেখুন'
   }
 };

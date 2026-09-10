@@ -33,9 +33,17 @@ import { colors, spacing, radii, shadows, fontSizes, fontWeights, fontFamilies }
  * are intentionally left untouched to avoid changing shared navigation/behavior.
  */
 
+// App languages — same codes LanguageContext/setLanguage use. Switching here re-renders every
+// screen's t() strings app-wide and persists the choice (MMKV), exactly like the chat widget.
+const LANGUAGE_OPTIONS = [
+  { code: 'en', label: 'English' },
+  { code: 'hi', label: 'हिन्दी' },
+  { code: 'bn', label: 'বাংলা' },
+];
+
 export default function CustomerProfileScreen() {
   const { user, profile, logout } = useAuth();
-  const { language } = useLanguage();
+  const { language, setLanguage } = useLanguage();
 
   const name = profile?.full_name || user?.name || 'User';
   const email = user?.email || profile?.email || '—';
@@ -109,8 +117,41 @@ export default function CustomerProfileScreen() {
       <View style={styles.card}>
         <InfoItem icon={Mail} tint={colors.primary600} bg={colors.primary50} label="Email" value={email} />
         <InfoItem icon={Phone} tint={colors.success600} bg={colors.success50} label="Phone" value={phone} />
-        <InfoItem icon={MapPin} tint={colors.danger500} bg={colors.danger50} label="Location" value={address} />
-        <InfoItem icon={Globe} tint={colors.accent600} bg={colors.accent50} label="Language" value={langLabel} last />
+        <InfoItem icon={MapPin} tint={colors.danger500} bg={colors.danger50} label="Location" value={address} last />
+      </View>
+
+      {/* ---- Language (interactive — switches the app language app-wide) ---- */}
+      <View style={styles.sectionHead}>
+        <Text style={styles.sectionTitle}>Language</Text>
+        <Text style={styles.sectionSub}>Choose your preferred language</Text>
+      </View>
+      <View style={styles.card}>
+        <View style={styles.langRowTop}>
+          <View style={[styles.infoIcon, { backgroundColor: colors.accent50 }]}>
+            <Globe size={18} color={colors.accent600} strokeWidth={2.2} />
+          </View>
+          <View style={styles.infoTextWrap}>
+            <Text style={styles.infoLabel}>Language</Text>
+            <Text style={styles.infoValue}>{langLabel}</Text>
+          </View>
+        </View>
+        <View style={styles.langOptions}>
+          {LANGUAGE_OPTIONS.map((opt) => {
+            const active = (language || 'en') === opt.code;
+            return (
+              <Pressable
+                key={opt.code}
+                style={[styles.langChip, active && styles.langChipActive]}
+                onPress={() => setLanguage(opt.code)}
+                accessibilityRole="button"
+                accessibilityState={{ selected: active }}
+                accessibilityLabel={`Set language to ${opt.label}`}
+              >
+                <Text style={[styles.langChipText, active && styles.langChipTextActive]}>{opt.label}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
       </View>
 
       {/* ---- Saved Addresses (existing data; only when present) ---- */}
@@ -252,6 +293,22 @@ const styles = StyleSheet.create({
   infoTextWrap: { flex: 1 },
   infoLabel: { fontSize: fontSizes.fsXs, color: colors.gray400, fontFamily: fontFamilies.interMedium },
   infoValue: { fontSize: fontSizes.fsSm, color: colors.gray900, fontFamily: fontFamilies.interSemiBold, fontWeight: fontWeights.fwSemibold, marginTop: 1 },
+
+  // ---- Language selector ----
+  langRowTop: { flexDirection: 'row', alignItems: 'center', gap: spacing.space3, paddingTop: spacing.space3, paddingBottom: spacing.space2 },
+  langOptions: { flexDirection: 'row', gap: spacing.space2, paddingBottom: spacing.space4, paddingTop: spacing.space1 },
+  langChip: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: spacing.space3,
+    borderRadius: radii.radiusMd,
+    borderWidth: 1,
+    borderColor: colors.gray200,
+    backgroundColor: colors.surfaceWhite,
+  },
+  langChipActive: { backgroundColor: colors.primary600, borderColor: colors.primary600 },
+  langChipText: { fontSize: fontSizes.fsSm, color: colors.gray700, fontFamily: fontFamilies.interSemiBold, fontWeight: fontWeights.fwSemibold },
+  langChipTextActive: { color: colors.white },
 
   // ---- Saved addresses ----
   savedRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.space3, paddingVertical: spacing.space3 },

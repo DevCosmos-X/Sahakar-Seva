@@ -1,0 +1,38 @@
+# Keep the Docker build context small and avoid leaking host-native/build artifacts into the
+# image. The project folder is bind-mounted at runtime, so these are only excluded from the
+# `docker build` context (the initial COPY of manifests).
+
+# Dependencies — never copy the host's (Windows) node_modules into the build context. The image
+# installs its own via `npm ci` (see Dockerfile), and the container keeps them behind an
+# anonymous volume so the bind mount can't shadow them.
+node_modules
+
+# Native build outputs — never needed by the JS/Metro container
+android/app/build
+android/build
+android/.gradle
+android/.cxx
+android/app/.cxx
+ios/build
+ios/Pods
+
+# Local env / secrets
+.env
+*.keystore
+*.jks
+
+# VCS & editor
+.git
+.gitignore
+.vscode
+.idea
+
+# Logs & caches
+*.log
+.metro-health-check*
+.watchmanconfig
+
+# Docker files themselves
+Dockerfile
+docker-compose.yml
+.dockerignore

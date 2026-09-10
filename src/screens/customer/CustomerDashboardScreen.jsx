@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { View, Text, Pressable, StyleSheet, TextInput } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   Clock, MapPin, X, Bell, Navigation, ChevronRight, ChevronDown, Search,
-  Wind, Droplet, Flame, Check, ShieldCheck, ArrowRight, Sparkles,
+  Wind, Droplet, Flame, Check, ShieldCheck, ArrowRight, Sparkles, Mic,
 } from 'lucide-react-native';
 import { useAuth } from '@context/AuthContext';
 import { mockServices, getServiceById } from '@data/mockServices';
@@ -63,6 +63,8 @@ export default function CustomerDashboardScreen({ navigation }) {
   const activeBookings = bookings.filter((b) => ['en-route', 'in-progress', 'assigned'].includes(b.status));
   const [reminders, setReminders] = useState(MOCK_REMINDERS);
   const [showHelpline, setShowHelpline] = useState(false);
+  // Frontend-only value for the service search input (visual field; no filtering/backend call).
+  const [serviceQuery, setServiceQuery] = useState('');
 
   const displayName = profile?.full_name?.split(' ')[0] || user?.name?.split(' ')[0] || 'there';
 
@@ -220,6 +222,24 @@ export default function CustomerDashboardScreen({ navigation }) {
             <Sparkles size={18} color={colors.primary600} strokeWidth={2.2} />
             <Text style={styles.servicesHeading}>What do you need help with?</Text>
           </View>
+
+          {/* Search bar — search icon left, mic right. Frontend-only visual field. */}
+          <View style={styles.searchBar}>
+            <Search size={18} color={colors.gray400} strokeWidth={2.2} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search 'AC Service', 'Plumber'..."
+              placeholderTextColor={colors.gray400}
+              value={serviceQuery}
+              onChangeText={setServiceQuery}
+              returnKeyType="search"
+              accessibilityLabel="Search services"
+            />
+            <Pressable hitSlop={8} accessibilityRole="button" accessibilityLabel="Voice search">
+              <Mic size={18} color={colors.primary600} strokeWidth={2.2} />
+            </Pressable>
+          </View>
+
           <ServiceCardGrid services={mockServices} onSelect={(s) => goBook({ service: s.id })} />
         </View>
 
@@ -372,8 +392,28 @@ const styles = StyleSheet.create({
   reminderDismiss: { padding: 2 },
 
   // ---- Services ----
-  servicesHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.space2, marginBottom: spacing.space4 },
+  servicesHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.space2, marginBottom: spacing.space3 },
   servicesHeading: { fontSize: fontSizes.fsXl, fontWeight: fontWeights.fwExtrabold, fontFamily: fontFamilies.interExtraBold, color: colors.gray900 },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.space2,
+    backgroundColor: colors.surfaceWhite,
+    borderRadius: radii.radiusFull,
+    borderWidth: 1,
+    borderColor: colors.gray200,
+    paddingVertical: 10,
+    paddingHorizontal: spacing.space4,
+    marginBottom: spacing.space4,
+    ...shadows.shadowSm,
+  },
+  searchInput: {
+    flex: 1,
+    paddingVertical: 0,
+    fontSize: fontSizes.fsSm,
+    fontFamily: fontFamilies.interRegular,
+    color: colors.gray900,
+  },
 
   // ---- Recent bookings ----
   bookingsList: { gap: spacing.space3 },

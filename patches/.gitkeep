@@ -1,0 +1,3 @@
+# This folder holds patch-package patch files (referenced by the "postinstall" script).
+# Kept in git (even when empty) so the Docker build's `COPY patches ./patches` always resolves
+# and patch-package has a directory to scan. Empty = no patches, which is valid.

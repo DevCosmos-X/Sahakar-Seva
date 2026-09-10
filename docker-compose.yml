@@ -1,0 +1,42 @@
+# Docker Compose for the SahakarSevaMobile JS/Metro dev environment.
+#
+# OPTION A — dependencies AND source are baked into the image at build time (see Dockerfile).
+# A fresh clone works with NO separate install step and NO volume seeding:
+#   docker compose build              # builds the image (installs deps + copies source; cached)
+#   docker compose up metro           # start the Metro bundler on host port 8081
+#   docker compose up -d metro        # ...in the background
+#   docker compose run --rm metro npm run lint    # one-off commands (lint/test)
+#   docker compose run --rm metro sh              # shell in the project
+#
+# WHY NO BIND MOUNT HERE:
+#   On Docker Desktop for Windows, bind-mounting the project folder over /app hides the image's
+#   baked node_modules (the anonymous-volume shield does not reliably seed). Baking both deps and
+#   source into the image sidesteps that entirely, so `build -> run` always has everything.
+#
+# LIVE EDITING (optional): if you want host edits to reflect without a rebuild, uncomment the
+#   `volumes` block below. The named `node_modules` volume must be primed once from the image:
+#     docker compose run --rm metro sh -lc "cp -a /image_modules/. /app/node_modules/ || true"
+#   ...or simply rebuild after changes. Most contributors just re-run `docker compose build`,
+#   which is fast because the dependency layer is cached.
+#
+# NOTE: native Android builds (gradlew / run-android) still run on the host — see Dockerfile.
+
+services:
+  metro:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    working_dir: /app
+    ports:
+      - "8081:8081"
+    environment:
+      - REACT_NATIVE_PACKAGER_HOSTNAME=0.0.0.0
+    tty: true
+    stdin_open: true
+    # --- Optional live-edit mount (see "LIVE EDITING" note above) ---
+    # volumes:
+    #   - .:/app:cached
+    #   - node_modules:/app/node_modules
+
+# volumes:
+#   node_modules:
